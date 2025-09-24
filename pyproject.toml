@@ -1,0 +1,12 @@
+[project]
+name = "kqw-ao-pipeline"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "ipython>=9.5.0",
+    "matplotlib>=3.10.6",
+    "numpy>=2.3.3",
+    "openai>=1.109.1",
+    "pandas>=2.3.2",
+]
