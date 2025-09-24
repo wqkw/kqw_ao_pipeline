@@ -471,6 +471,7 @@ dependencies = [
     { name = "openai" },
     { name = "pandas" },
     { name = "psycopg" },
+    { name = "pydantic" },
     { name = "requests" },
 ]
 
@@ -483,6 +484,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.109.1" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "psycopg", specifier = ">=3.2.10" },
+    { name = "pydantic", specifier = ">=2.11.9" },
     { name = "requests", specifier = ">=2.32.5" },
 ]
 

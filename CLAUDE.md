@@ -1,0 +1,2 @@
+- openrouter_wrapper.py provides llm() function for API calls with image support and reasoning control. All llm calls should use this.
+- for all python commands use uv run 
