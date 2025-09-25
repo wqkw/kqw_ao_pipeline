@@ -6,6 +6,8 @@ Script to tile images from ref_moodboard into a 3x2 grid with black separators.
 import os
 from PIL import Image
 import glob
+import boto3
+from datetime import datetime
 
 def create_moodboard_tile():
     input_dir = "data/ref_moodboard"
@@ -95,5 +97,38 @@ def create_moodboard_tile():
     print(f"Tiled moodboard saved to {output_path}")
     print(f"Final dimensions: {total_width}x{total_height}")
 
+    return output_path
+
+# TODO KQW NEED CREDENTIALS, THIS DOESNT WORK
+def upload_to_s3(file_path):
+    """Upload file to S3 bucket under kqwtest subfolder and write S3 path to txt file"""
+    s3_client = boto3.client('s3')
+    bucket_name = 'artofficial-metagen'
+
+    # Generate unique filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"moodboard_tile_{timestamp}.png"
+    s3_key = f"kqwtest/{filename}"
+
+    try:
+        # Upload file to S3
+        s3_client.upload_file(file_path, bucket_name, s3_key)
+        s3_path = f"https://{bucket_name}.s3.us-east-1.amazonaws.com/{s3_key}"
+        print(f"Successfully uploaded to S3: {s3_path}")
+
+        # Write S3 path to txt file in data/
+        os.makedirs("data", exist_ok=True)
+        txt_path = f"data/s3_path_{timestamp}.txt"
+        with open(txt_path, 'w') as f:
+            f.write(s3_path)
+        print(f"S3 path written to: {txt_path}")
+
+        return s3_path
+    except Exception as e:
+        print(f"Error uploading to S3: {e}")
+        return None
+
 if __name__ == "__main__":
-    create_moodboard_tile()
+    output_file = create_moodboard_tile()
+    if output_file and os.path.exists(output_file):
+        upload_to_s3(output_file)
