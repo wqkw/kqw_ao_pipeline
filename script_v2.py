@@ -9,102 +9,25 @@ import asyncio
 import os
 load_dotenv()
 
-def print_truncated(data):
-    """Print nested lists/dicts with items truncated at 200 characters"""
-    def truncate_item(item):
-        if isinstance(item, str) and len(item) > 200:
-            return item[:200] + "..."
-        elif isinstance(item, dict):
-            return {k: truncate_item(v) for k, v in item.items()}
-        elif isinstance(item, list):
-            return [truncate_item(x) for x in item]
-        else:
-            return item
-
-    truncated = truncate_item(data)
-    if isinstance(data, list):
-        for item in truncated:
-            print(item)
-    else:
-        print(truncated)
 
 
-METAPLAN_PROMPT = """
-1. Make Base World Components
-	•	Style & Aesthetic: global rules around lighting, textures, palettes.
-	•	Characters: personality, dialogue style, relationships, motivations.
-	•	Locations: distinct places with their own look/feel tied to the world.
-	•	Props & Objects: context-rich items that carry meaning or drive the plot.
+if True:
+    LORE_PROMPT = """
+    Based on the attached moodboard, generate a detailed DND dungeon-master style description of lore for this world
+    """
 
-These are essentially your worldbuilding “components.”
+    with open("data/moodboard_tile.png", "rb") as img_file:
+        img_b64 = base64.b64encode(img_file.read()).decode()
 
-⸻
+    RESP1, _, history = llm(
+        model="openai/gpt-5",
+        text=LORE_PROMPT,
+        reasoning_effort='minimal',
+        input_image_url=f"data:image/png;base64,{img_b64}"
+    )
+    print(RESP1)
 
-2. Generate Storylines
-	•	AI ingests those components and proposes multiple narrative arcs (3-5 options).
-	•	Each storyline should:
-	•	Use the world rules consistently.
-	•	Highlight character motivations and conflicts.
-	•	Incorporate props and locations naturally into the arc.
 
-User picks one storyline to proceed with.
-
-⸻
-
-3. Generate Shot List & Scene Breakdown
-	•	Once a storyline is chosen, AI produces:
-	•	Shot list → camera framing, composition, focal points.
-	•	Scene breakdown → sequence of beats, what needs to happen, what's shown.
-	•	This merges narrative logic with visual planning.
-
-A scene is composed of multiple shots. All shots in a scene should use a (mostly) shared set of components.
-
-⸻
-
-4. Generate prompts for scene stage setting shots
-	•	Each scene starts with a canonical “stage setting shot”:
-	•	The stage that carries all contextual DNA of the world, characters, and props.
-	•	Acts as a visual anchor point.
-	•	AI generates stage setting shots → human does a context check (world consistency, aesthetic match, continuity).
-Create prompts for making the stage setting shots. These will be passed into an image generation model.
-
-⸻
-
-5. Shot Generation from Stage Setting Shots
-	•	Individual frames/shots are generated from the stage setting shot.
-	•	Each shot is checked for:
-	•	Continuity (matches the stage setting shots/world).
-	•	Contextual fidelity (characters/props behave as expected).
-
-⸻
-
-6. Iterative Correction Loop
-	•	If a shot fails:
-	1.	Human analyzes the mismatch.
-	2.	Writes edit instructions.
-	3.	AI regenerates the shot with corrections.
-	4.	Repeat until the shot passes checks.
-
-Approved shots flow into the storyboard.
-
-⸻
-
-7. End Product
-	•	A storyboard with continuity + narrative alignment.
-	•	Each shot linked back to its base scene and world DNA.
-	•	Flexible enough to spin off multiple narrative arcs from the same world setup.
-
-⸻
-
-Where AI adds the most value here:
-	•	Storyline ideation from raw world components.
-	•	Shot/scene breakdowns structured for production.
-	•	Visual anchor generation (base scenes).
-	•	Automated continuity checks between shots and the world.
-
-⸻
-
-"""
 
 if True:
     PROMPT1 = """

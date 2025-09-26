@@ -3,6 +3,7 @@ name = "kqw-ao-pipeline"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.12.15",
     "boto3>=1.40.38",
     "dotenv>=0.9.9",
     "ipython>=9.5.0",
