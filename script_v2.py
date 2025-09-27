@@ -8,24 +8,41 @@ import json
 import asyncio
 import os
 load_dotenv()
+import utils as utils
 
 
 
 if True:
-    LORE_PROMPT = """
-    Based on the attached moodboard, generate a detailed DND dungeon-master style description of lore for this world
-    """
-
     with open("data/moodboard_tile.png", "rb") as img_file:
         img_b64 = base64.b64encode(img_file.read()).decode()
 
     RESP1, _, history = llm(
         model="openai/gpt-5",
-        text=LORE_PROMPT,
-        reasoning_effort='minimal',
+        text='\n\n'.join(["Based on the attached moodboard, generate a detailed DND dungeon-master style description of lore for this world", utils.get_prompt("lore_guide.md")]),
+        reasoning_effort='medium',
         input_image_url=f"data:image/png;base64,{img_b64}"
     )
     print(RESP1)
+
+if True:
+    PROMPT2 = f"""
+    Based on the lore for a given world, generate a story. The story should fit in an approximately 1 minute long short form video. 
+
+    Outline the scenes (should have 5-10), which each should have 1-4 shots. 
+
+    LORE: 
+    {RESP1}
+
+    STORY GUIDE:
+    {utils.get_prompt("narrative_guide.md")}
+    """
+
+    RESP2, _, history = llm(
+        model="openai/gpt-5",
+        text=PROMPT2,
+        # context=history,
+    )
+    print(RESP2)
 
 
 

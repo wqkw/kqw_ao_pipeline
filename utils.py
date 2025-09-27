@@ -1,5 +1,11 @@
 
 
+def get_prompt(filename):
+    """Load file contents from prompts/ folder as a string"""
+    with open(f"prompts/{filename}", "r") as f:
+        return f.read()
+
+
 def print_truncated(data):
     """Print nested lists/dicts with items truncated at 200 characters"""
     def truncate_item(item):

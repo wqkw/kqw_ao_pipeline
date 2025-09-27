@@ -8,6 +8,9 @@ from PIL import Image
 import glob
 import boto3
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_moodboard_tile():
     input_dir = "data/ref_moodboard"
@@ -56,14 +59,27 @@ def create_moodboard_tile():
     target_width = 400  # Reduced from original size
 
     for img_path in image_files:  # Use all images
-        with Image.open(img_path) as img:
-            # Calculate height to maintain aspect ratio
-            aspect_ratio = img.height / img.width
-            target_height = int(target_width * aspect_ratio)
+        try:
+            with Image.open(img_path) as img:
+                # Verify image can be loaded
+                img.load()
 
-            # Resize image
-            resized_img = img.resize((target_width, target_height), Image.LANCZOS)
-            images.append(resized_img)
+                # Calculate height to maintain aspect ratio
+                aspect_ratio = img.height / img.width
+                target_height = int(target_width * aspect_ratio)
+
+                # Resize image
+                resized_img = img.resize((target_width, target_height), Image.LANCZOS)
+                images.append(resized_img)
+        except (OSError, IOError) as e:
+            print(f"Warning: Skipping corrupted image {img_path}: {e}")
+            continue
+
+    if not images:
+        print("No valid images found after filtering corrupted files")
+        return None
+
+    print(f"Successfully loaded {len(images)} valid images")
 
     # Calculate dimensions for the tiled image
     separator_width = 5
@@ -99,18 +115,27 @@ def create_moodboard_tile():
 
     return output_path
 
-# TODO KQW NEED CREDENTIALS, THIS DOESNT WORK
 def upload_to_s3(file_path):
     """Upload file to S3 bucket under kqwtest subfolder and write S3 path to txt file"""
-    s3_client = boto3.client('s3')
-    bucket_name = 'artofficial-metagen'
 
-    # Generate unique filename with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"moodboard_tile_{timestamp}.png"
-    s3_key = f"kqwtest/{filename}"
+    # Check for AWS credentials
+    if not (os.getenv('AWS_ACCESS_KEY_ID') or os.getenv('AWS_PROFILE')):
+        print("AWS credentials not found. Please add to .env file:")
+        print("AWS_ACCESS_KEY_ID=your_access_key")
+        print("AWS_SECRET_ACCESS_KEY=your_secret_key")
+        print("AWS_DEFAULT_REGION=us-east-1")
+        print("\nOr configure AWS CLI with 'aws configure'")
+        return None
 
     try:
+        s3_client = boto3.client('s3')
+        bucket_name = 'artofficial-metagen'
+
+        # Generate unique filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"moodboard_tile_{timestamp}.png"
+        s3_key = f"kqwtest/{filename}"
+
         # Upload file to S3
         s3_client.upload_file(file_path, bucket_name, s3_key)
         s3_path = f"https://{bucket_name}.s3.us-east-1.amazonaws.com/{s3_key}"
