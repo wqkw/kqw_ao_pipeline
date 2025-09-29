@@ -28,7 +28,7 @@ if True:
     PROMPT2 = f"""
     Based on the lore for a given world, generate a story. The story should fit in an approximately 1 minute long short form video. 
 
-    Outline the scenes (should have 5-10), which each should have 1-4 shots. 
+    Outline the scenes (should have 5-10), which each should have 1-4 shots. Give detailed descriptions of each shot/scene and what is the "turn", or important content of it. 
 
     LORE: 
     {RESP1}
@@ -43,6 +43,48 @@ if True:
         # context=history,
     )
     print(RESP2)
+
+if True:
+    import importlib
+    import prompts.outputstruct_base_components
+    importlib.reload(prompts.outputstruct_base_components)
+    from prompts.outputstruct_base_components import StoryboardSpec
+
+    
+    PROMPT3 = f"""
+    Based on this story, scene shot list, and the according world lore for reference, generate a set of base components:
+    specifically: locations, characters, props, sound, and music.
+
+    Give detailed descriptions for each of the components, and make sure they're all consistent with the world lore.
+
+    Each scene should have 1-2 locations, 1-4 characters, and a handful of props. Sound and music should be descriptions
+
+    STORY: 
+    {RESP2}
+
+    LORE:
+    {RESP1}
+    """
+
+    RESP3, _, history = llm(
+        model="openai/gpt-5",
+        text=PROMPT3,
+        response_format=StoryboardSpec,
+        # context=history,
+    )
+    print(RESP3)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -114,6 +156,19 @@ if True:
             traceback.print_exc()
         except:
             pass
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class ScenePrompt(BaseModel):

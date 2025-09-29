@@ -4,6 +4,8 @@ import os
 import base64
 import asyncio
 import aiohttp
+import time
+import random
 from typing import Optional, Union, List, Type, Tuple, Dict, Any
 from pydantic import BaseModel
 
@@ -86,21 +88,30 @@ def llm(
             }
         }
 
-    response = requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        data=json.dumps(payload),
-    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload),
+        )
 
-    try:
-        full_response = response.json()
-    except json.JSONDecodeError:
-        print(f"Error: Non-JSON response from API. Status: {response.status_code}")
-        print(f"Response text: {response.text}")
-        raise
+        try:
+            full_response = response.json()
+            break  # Success, exit retry loop
+        except json.JSONDecodeError:
+            if attempt < max_retries - 1:
+                delay = 0.5 + random.uniform(0, 0.5)  # 0.5-1.0 second delay
+                print(f"JSON decode error on attempt {attempt + 1}, retrying in {delay:.1f}s...")
+                time.sleep(delay)
+                continue
+            else:
+                print(f"Error: Non-JSON response from API after {max_retries} attempts. Status: {response.status_code}")
+                print(f"Response text: {response.text}")
+                raise
 
     # Extract message content from the response
     try:
@@ -211,22 +222,31 @@ async def llm_async(
             }
         }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(payload),
-        ) as response:
-            try:
-                full_response = await response.json()
-            except json.JSONDecodeError:
-                response_text = await response.text()
-                print(f"Error: Non-JSON response from API. Status: {response.status}")
-                print(f"Response text: {response_text}")
-                raise
+    max_retries = 3
+    for attempt in range(max_retries):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps(payload),
+            ) as response:
+                try:
+                    full_response = await response.json()
+                    break  # Success, exit retry loop
+                except json.JSONDecodeError:
+                    if attempt < max_retries - 1:
+                        delay = 0.5 + random.uniform(0, 0.5)  # 0.5-1.0 second delay
+                        print(f"JSON decode error on attempt {attempt + 1}, retrying in {delay:.1f}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        response_text = await response.text()
+                        print(f"Error: Non-JSON response from API after {max_retries} attempts. Status: {response.status}")
+                        print(f"Response text: {response_text}")
+                        raise
 
     # Extract message content from the response
     try:

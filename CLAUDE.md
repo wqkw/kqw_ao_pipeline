@@ -1,3 +1,23 @@
+# IMPORTANT must follow guidelines:
+- For structured outputs, all Pydantic models MUST include:
+model_config = {"extra": "forbid"} or subclass
+class StrictModel(BaseModel):
+    """Base model that rejects unknown fields to keep outputs clean."""
+    model_config = ConfigDict(extra="forbid")
+This ensures additionalProperties: false in the JSON schema, which is required by Azure OpenAI.
+
+- Additionally, there must be no optional fields, all fields must be required.
+
+- For default models, never use gpt 4o or 4o-mini, always use gpt 5, 5-mini, etc.
+Don't use __file__ for the most part
+
+- creating new files that need credentials, remember to do:
+from dotenv import load_dotenv
+load_dotenv()
+
+- for all python commands use uv run 
+
+# openrouter wrapper
 - openrouter_wrapper.py provides llm() function for API calls with image support, reasoning control, and structured outputs. All llm calls should use this.
 
 llm(model, text, context=None, input_image_url=None, reasoning_effort="medium", reasoning_exclude=True, response_format=None, output_is_image=False)
@@ -19,15 +39,3 @@ batch_llm(model, texts, context=None, image_urls=None, reasoning_effort="medium"
 
 Usage: responses, full_responses, combined_history = await batch_llm("openai/gpt-5", ["prompt1", "prompt2"])
 
-IMPORTANT: For structured outputs, all Pydantic models MUST include:
-model_config = {"extra": "forbid"}
-This ensures additionalProperties: false in the JSON schema, which is required by Azure OpenAI.
-
-For default models, never use gpt 4o or 4o-mini, always use gpt 5, 5-mini, etc.
-Don't use __file__ for the most part
-
-creating new files that need credentials, remember to do:
-from dotenv import load_dotenv
-load_dotenv()
-
-for all python commands use uv run 
