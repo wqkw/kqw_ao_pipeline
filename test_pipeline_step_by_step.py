@@ -10,6 +10,7 @@ from generation_pipeline import (
     create_context_dto, create_output_dto, extract_context_data,
     patch_artifact, generate_step, generate_batch_components,
     generate_batch_stage_shots, generate_stage_shot_images,
+    generate_batch_shot_descriptions, generate_shot_images,
     save_artifact_checkpoint
 )
 
@@ -92,6 +93,10 @@ async def run_single_step(artifact: StoryboardSpec, step: GenerationStep, user_i
         artifact = await generate_batch_stage_shots(artifact, user_input)
     elif step == GenerationStep.STAGE_SHOT_IMAGES:
         artifact = await generate_stage_shot_images(artifact, user_input)
+    elif step == GenerationStep.SHOT_DESCRIPTIONS:
+        artifact = await generate_batch_shot_descriptions(artifact, user_input)
+    elif step == GenerationStep.SHOT_IMAGES:
+        artifact = await generate_shot_images(artifact, user_input)
     # Handle single-generation steps
     else:
         artifact, output = await generate_step(artifact, step, user_input)
@@ -185,7 +190,7 @@ def load_latest_artifact(project_name: str) -> StoryboardSpec:
         return None
 
     # Sort by step order (lore, narrative, scenes, etc.)
-    step_order = ["lore", "narrative", "scenes", "component_descriptions", "component_images", "stage_shot_descriptions", "stage_shot_images", "shot_images"]
+    step_order = ["lore", "narrative", "scenes", "component_descriptions", "component_images", "stage_shot_descriptions", "stage_shot_images", "shot_descriptions", "shot_images"]
 
     def step_priority(path):
         filename = os.path.basename(path)
@@ -235,6 +240,7 @@ async def main():
         GenerationStep.COMPONENT_IMAGES: "Generate component images",
         GenerationStep.STAGE_SHOT_DESCRIPTIONS: "Create establishing shots for each scene",
         GenerationStep.STAGE_SHOT_IMAGES: "Generate stage setting images",
+        GenerationStep.SHOT_DESCRIPTIONS: "Break down each scene into individual shots with camera angles and framing",
         GenerationStep.SHOT_IMAGES: "Generate final shot images"
     }
 

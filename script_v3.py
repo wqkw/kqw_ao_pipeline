@@ -26,6 +26,7 @@ async def main():
         GenerationStep.COMPONENT_IMAGES: "Generate high-quality component images for storyboarding",
         GenerationStep.STAGE_SHOT_DESCRIPTIONS: "Create establishing shots that set the visual context for each scene",
         GenerationStep.STAGE_SHOT_IMAGES: "Generate stage setting images that establish the environment",
+        GenerationStep.SHOT_DESCRIPTIONS: "Break down each scene into individual shots with detailed descriptions of camera angles, framing, and action",
         GenerationStep.SHOT_IMAGES: "Generate final shot images for the complete storyboard"
     }
 
