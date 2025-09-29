@@ -124,7 +124,7 @@ if True:
         text=PROMPT1,
         context=METAPLAN_PROMPT,
         reasoning_effort='minimal',
-        input_image_url=f"data:image/png;base64,{img_b64}"
+        input_image_path=f"data:image/png;base64,{img_b64}"
     )
     print(RESP1)
 
@@ -135,7 +135,7 @@ if False:
     RESP1, _, history = llm(
         model="openai/gpt-5",
         text='Based on the aesthetics of this moodboard, generate a detailed DND dungeon-master style description of lore for this world',
-        input_image_url=f"data:image/png;base64,{img_b64}"
+        input_image_path=f"data:image/png;base64,{img_b64}"
     )
     print(RESP1)
 

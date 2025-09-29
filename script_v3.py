@@ -14,7 +14,7 @@ async def main():
     artifact = StoryboardSpec(
         name="crimson_rebellion",
         title="The Crimson Rebellion",
-        moodboard_path="assets/moodboard.jpg"  # Assume this exists
+        moodboard_path="data/moodboard_tile.png"  # Assume this exists
     )
 
     # Define user inputs for each step

@@ -16,18 +16,20 @@ class StrictModel(BaseModel):
 class LocationSpec(StrictModel):
     """A specific place used in the story."""
     name: str = Field(..., description="Unique name for this location (e.g., 'Crimson Foundry', 'Central Plaza').")
-    description: Optional[str] = Field(None, description="Visual description including appearance, atmosphere, layout, lighting, notable features, and any hazards or important details that affect the story.")
+    description: Optional[str] = Field(None, description="Visual description including appearance, atmosphere, layout, notable features, and any hazards or important details that affect the story.")
+    image_path: Optional[str] = Field(None, description="Path to the generated image of this location.")
 
 class CharacterSpec(StrictModel):
     """A character or group in the story."""
     name: str = Field(..., description="Character name or group designation (e.g., 'Captain Thorne', 'Palace Guards').")
     description: Optional[str] = Field(None, description="Physical appearance, personality, motivations, clothing, mannerisms, role in story, and key relationships or abilities.")
+    image_path: Optional[str] = Field(None, description="Path to the generated image of this character.")
 
 class PropSpec(StrictModel):
     """Any object, vehicle, or creature in the story."""
     name: str = Field(..., description="Descriptive name for this prop (e.g., 'Resonance Scanner', 'Broken Crown').")
     description: Optional[str] = Field(None, description="Appearance, materials, condition, function, how characters interact with it, and any special properties or significance.")
-    image_url: Optional[str] = Field(None, description="URL or path to the generated image of this prop.")
+    image_path: Optional[str] = Field(None, description="Path to the generated image of this prop.")
 
 
 SoundType = Literal[
@@ -73,7 +75,7 @@ class ShotSpec(StrictModel):
     dialogue: Optional[str] = Field(None, description="All dialogue spoken in this shot, with speaker attribution if needed.")
     duration_seconds: Optional[float] = Field(None, description="Estimated shot duration in seconds.")
     description: Optional[str] = Field(None, description="Camera angle, shot size, composition, lighting, actions, and technical requirements. What the audience sees.")
-    image_url: Optional[str] = Field(None, description="URL or path to the generated image of this shot.")
+    image_path: Optional[str] = Field(None, description="Path to the generated image of this shot.")
 
 
 # ---------- Narrative Structure ----------
