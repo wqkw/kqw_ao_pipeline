@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Dict, Type, Any, get_origin, get_args
+from typing import List, Dict, Type, Any
 from pydantic import BaseModel, Field, ConfigDict, create_model
-from pydantic.fields import FieldInfo
 from enum import Enum
 
-from prompts.storyboard_artifact import StoryboardSpec, SceneSpec, CharacterSpec, LocationSpec, PropSpec, SoundCue, MusicCue
+from prompts.storyboard_artifact import StoryboardSpec, SceneSpec, CharacterSpec, LocationSpec, PropSpec
 
 
 # ---------- Base (forbid unknown keys for LLM outputs) ----------
@@ -18,6 +17,7 @@ class StrictModel(BaseModel):
 # ---------- Generation Steps ----------
 
 class GenerationStep(Enum):
+    LOGLINE = "logline"
     LORE = "lore"
     NARRATIVE = "narrative"
     SCENES = "scenes"
@@ -29,6 +29,39 @@ class GenerationStep(Enum):
     SHOT_IMAGES = "shot_images"
 
 
+# ---------- Model Selection ----------
+
+def _select_model_for_step(step: GenerationStep) -> tuple[str, str]:
+    """Select model and reasoning effort based on step requirements.
+
+    Currently uses fast models for all steps:
+    - Image generation: gemini-2.5-flash-image-preview
+    - Text generation: gemini-2.5-flash with minimal reasoning
+
+    Can be easily updated to use gpt-5 + medium reasoning for lore/narrative/scenes.
+
+    Args:
+        step: The generation step to select a model for
+
+    Returns:
+        Tuple of (model_name, reasoning_effort)
+        Note: reasoning_effort is ignored for image generation steps
+    """
+    # Image generation steps use image-preview model
+    if step in [GenerationStep.COMPONENT_IMAGES, GenerationStep.STAGE_SHOT_IMAGES, GenerationStep.SHOT_IMAGES]:
+        return "google/gemini-2.5-flash-image-preview", "minimal"
+
+    # Lore generation uses GPT-5 with medium reasoning
+    if step == GenerationStep.LORE:
+        return "openai/gpt-5", "medium"
+
+    # Other text generation steps use fast model
+    # To use GPT-5 for narrative/scenes as well, uncomment this:
+    # if step in [GenerationStep.NARRATIVE, GenerationStep.SCENES]:
+    #     return "openai/gpt-5", "medium"
+    return "google/gemini-2.5-flash", "minimal"
+
+
 # ---------- Field Extraction Helper ----------
 
 def get_field_desc(model_class: Type[BaseModel], field_name: str) -> str:
@@ -37,13 +70,50 @@ def get_field_desc(model_class: Type[BaseModel], field_name: str) -> str:
     return field_info.description or f"{field_name} from {model_class.__name__}"
 
 
+def _read_lore_guide() -> str:
+    """Read the lore generation guide from prompts/lore_guide.md.
+
+    Returns:
+        Content of the lore guide, or empty string if file not found
+    """
+    import os
+
+    lore_guide_path = os.path.join("prompts", "lore_guide.md")
+    try:
+        with open(lore_guide_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        print(f"Warning: Could not find {lore_guide_path}")
+        return ""
+
+
+def _read_logline_guide() -> str:
+    """Read the logline generation guide from prompts/logline_guide.md.
+
+    Returns:
+        Content of the logline guide, or empty string if file not found
+    """
+    import os
+
+    logline_guide_path = os.path.join("prompts", "logline_guide.md")
+    try:
+        with open(logline_guide_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        print(f"Warning: Could not find {logline_guide_path}")
+        return ""
+
+
 # ---------- Dynamic DTO Creation ----------
 
 def create_context_dto(step: GenerationStep) -> Type[StrictModel]:
     """Create context DTO using descriptions from the core artifact."""
     fields = {"prompt_input": (str, Field(..., description="User's creative input for this generation step"))}
 
-    if step == GenerationStep.LORE:
+    if step == GenerationStep.LOGLINE:
+        fields["moodboard_path"] = (str, Field(..., description=get_field_desc(StoryboardSpec, "moodboard_path")))
+
+    elif step == GenerationStep.LORE:
         fields["moodboard_path"] = (str, Field(..., description=get_field_desc(StoryboardSpec, "moodboard_path")))
 
     elif step == GenerationStep.NARRATIVE:
@@ -99,7 +169,15 @@ def create_output_dto(step: GenerationStep) -> Type[StrictModel]:
     """Create output DTO using descriptions from the core artifact."""
     fields = {}
 
-    if step == GenerationStep.LORE:
+    if step == GenerationStep.LOGLINE:
+        base_desc = get_field_desc(StoryboardSpec, "logline")
+        fields["logline_option_1"] = (str, Field(..., description=f"First option: {base_desc}"))
+        fields["logline_option_2"] = (str, Field(..., description=f"Second option: {base_desc}"))
+        fields["logline_option_3"] = (str, Field(..., description=f"Third option: {base_desc}"))
+        fields["logline_option_4"] = (str, Field(..., description=f"Fourth option: {base_desc}"))
+        fields["logline_option_5"] = (str, Field(..., description=f"Fifth option: {base_desc}"))
+
+    elif step == GenerationStep.LORE:
         base_desc = get_field_desc(StoryboardSpec, "lore")
         fields["lore_option_1"] = (str, Field(..., description=f"First option: {base_desc}"))
         fields["lore_option_2"] = (str, Field(..., description=f"Second option: {base_desc}"))
@@ -146,12 +224,20 @@ def create_output_dto(step: GenerationStep) -> Type[StrictModel]:
 def patch_artifact(artifact: StoryboardSpec, step: GenerationStep, output: BaseModel, user_choice: int = 0) -> StoryboardSpec:
     """Update the artifact with LLM output. For multi-option outputs, user_choice selects which option."""
 
-    if step == GenerationStep.LORE:
+    if step == GenerationStep.LOGLINE:
+        options = [output.logline_option_1, output.logline_option_2, output.logline_option_3,
+                   output.logline_option_4, output.logline_option_5]
+        save_multi_option_output(artifact.name, step, options, user_choice)
+        artifact.logline = options[user_choice]
+
+    elif step == GenerationStep.LORE:
         options = [output.lore_option_1, output.lore_option_2, output.lore_option_3]
+        save_multi_option_output(artifact.name, step, options, user_choice)
         artifact.lore = options[user_choice]
 
     elif step == GenerationStep.NARRATIVE:
         options = [output.narrative_option_1, output.narrative_option_2, output.narrative_option_3]
+        save_multi_option_output(artifact.name, step, options, user_choice)
         artifact.narrative = options[user_choice]
 
     elif step == GenerationStep.SCENES:
@@ -254,7 +340,8 @@ def patch_prop_image_path(artifact: StoryboardSpec, prop_name: str, image_path: 
 # ---------- Dependencies ----------
 
 DEPENDENCIES = {
-    GenerationStep.LORE: [],
+    GenerationStep.LOGLINE: [],
+    GenerationStep.LORE: [GenerationStep.LOGLINE],
     GenerationStep.NARRATIVE: [GenerationStep.LORE],
     GenerationStep.SCENES: [GenerationStep.LORE, GenerationStep.NARRATIVE],
     GenerationStep.COMPONENT_DESCRIPTIONS: [GenerationStep.SCENES],
@@ -271,6 +358,7 @@ DEPENDENCIES = {
 def get_completion_status(artifact: StoryboardSpec) -> Dict[GenerationStep, bool]:
     """Check which generation steps have been completed."""
     return {
+        GenerationStep.LOGLINE: artifact.logline is not None,
         GenerationStep.LORE: artifact.lore is not None,
         GenerationStep.NARRATIVE: artifact.narrative is not None,
         GenerationStep.SCENES: artifact.scenes is not None and len(artifact.scenes) > 0,
@@ -333,7 +421,6 @@ def get_next_steps(artifact: StoryboardSpec) -> List[GenerationStep]:
 
 async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_input: str, **kwargs) -> tuple[StoryboardSpec, BaseModel]:
     """Execute a single generation step."""
-    import asyncio
     from openrouter_wrapper import batch_llm
 
     # Create context DTO and populate with data
@@ -344,28 +431,77 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     # Create output DTO
     OutputModel = create_output_dto(step)
 
-    # Handle image generation steps
-    if OutputModel is None:
-        if step == GenerationStep.COMPONENT_IMAGES:
-            responses, _, _ = await batch_llm(
-                model="google/gemini-2.5-flash",  # Fast image generation
-                texts=[f"Generate component: {context.prop_description}"],
-                context="Create a high-quality component image for storyboarding",
-                output_is_image=True
-            )
-            image_path = save_image_to_data(responses[0], artifact.name, "component", context.prop_name)
-            artifact = patch_prop_image_path(artifact, context.prop_name, image_path)
-            return artifact, None
-        return artifact, None
+    # Select model and reasoning effort based on step
+    model, reasoning = _select_model_for_step(step)
 
-    # For structured output steps - USE FAST MODEL WITHOUT REASONING
-    responses, _, _ = await batch_llm(
-        model="google/gemini-2.5-flash",  # Fast model instead of GPT-5
-        texts=[prompt_input],
-        context=f"Use this context: {context.model_dump_json()}",
-        response_format=OutputModel,
-        reasoning_effort="minimal"  # Minimal reasoning for speed
-    )
+    # Special handling for LOGLINE step: include moodboard image and logline guide
+    if step == GenerationStep.LOGLINE:
+        # Extract moodboard path for image input
+        moodboard_path = context_data.get("moodboard_path")
+
+        # Read logline guide
+        logline_guide = _read_logline_guide()
+
+        # Build context with logline guide
+        context_str = f"""LOGLINE GENERATION GUIDE:
+
+{logline_guide}
+
+---
+
+USER REQUEST:
+{prompt_input}
+
+Generate 5 distinct logline options following the guide above. Reference the provided moodboard image for visual style and tone."""
+
+        # Generate with moodboard image as input
+        responses, _, _ = await batch_llm(
+            model=model,
+            texts=[context_str],
+            context=None,  # Context is in the text itself
+            image_paths=[moodboard_path],  # Pass as list (one per text)
+            response_format=OutputModel,
+            reasoning_effort=reasoning
+        )
+
+    # Special handling for LORE step: include moodboard image and lore guide
+    elif step == GenerationStep.LORE:
+        # Extract moodboard path for image input
+        moodboard_path = context_data.get("moodboard_path")
+
+        # Read lore guide
+        lore_guide = _read_lore_guide()
+
+        # Build context with lore guide
+        context_str = f"""LORE GENERATION GUIDE:
+
+{lore_guide}
+
+---
+
+USER REQUEST:
+{prompt_input}
+
+Generate 3 distinct lore options following the guide above. Reference the provided moodboard image for visual style and tone."""
+
+        # Generate with moodboard image as input
+        responses, _, _ = await batch_llm(
+            model=model,
+            texts=[context_str],
+            context=None,  # Context is in the text itself
+            image_paths=[moodboard_path],  # Pass as list (one per text)
+            response_format=OutputModel,
+            reasoning_effort=reasoning
+        )
+    else:
+        # Standard generation for other steps
+        responses, _, _ = await batch_llm(
+            model=model,
+            texts=[prompt_input],
+            context=f"Use this context: {context.model_dump_json()}",
+            response_format=OutputModel,
+            reasoning_effort=reasoning
+        )
 
     return artifact, responses[0]
 
@@ -375,7 +511,7 @@ def extract_context_data(artifact: StoryboardSpec, step: GenerationStep, **kwarg
     data = kwargs.copy()  # Start with any provided kwargs
 
     # Add data from artifact based on what each step needs
-    if step in [GenerationStep.LORE, GenerationStep.COMPONENT_DESCRIPTIONS, GenerationStep.COMPONENT_IMAGES]:
+    if step in [GenerationStep.LOGLINE, GenerationStep.LORE, GenerationStep.COMPONENT_DESCRIPTIONS, GenerationStep.COMPONENT_IMAGES]:
         if artifact.moodboard_path:
             data["moodboard_path"] = artifact.moodboard_path
 
@@ -457,6 +593,46 @@ def save_image_to_data(image_bytes: bytes, project_name: str, image_type: str, i
         f.write(image_bytes)
 
     return filepath
+
+
+def save_multi_option_output(project_name: str, step: GenerationStep, options: List[str], user_choice: int) -> None:
+    """Save multi-option outputs (lore/narrative) to markdown file.
+
+    Args:
+        project_name: Name of the project
+        step: Generation step (LORE or NARRATIVE)
+        options: List of generated options
+        user_choice: Index of the option that was selected (0-based)
+    """
+    import os
+    from datetime import datetime
+
+    # Create data directory
+    data_dir = os.path.join("data", project_name)
+    os.makedirs(data_dir, exist_ok=True)
+
+    # Generate timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Create markdown content
+    md_content = f"# {step.value.upper()} Options\n\n"
+    md_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    md_content += "---\n\n"
+
+    for i, option in enumerate(options):
+        selected = " ✓ SELECTED" if i == user_choice else ""
+        md_content += f"## Option {i+1}{selected}\n\n"
+        md_content += f"{option}\n\n"
+        md_content += "---\n\n"
+
+    # Save to file
+    filename = f"{step.value}_options_{timestamp}.md"
+    filepath = os.path.join(data_dir, filename)
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(md_content)
+
+    print(f"📝 Options saved: {filepath}")
 
 
 def save_artifact_checkpoint(artifact: StoryboardSpec, step: GenerationStep) -> None:
@@ -805,13 +981,14 @@ async def generate_stage_shot_images(artifact: StoryboardSpec, prompt_input: str
     if not texts:
         return artifact
 
-    # Generate images using Gemini 2.5 Flash in batch
+    # Generate images using model selector
+    model, _ = _select_model_for_step(GenerationStep.STAGE_SHOT_IMAGES)
     print(f"🎨 Generating {len(texts)} stage setting images in batch...")
     print(f"  📍 Scenes: {[artifact.scenes[i].name for i in scene_indices]}")
 
     try:
         responses, _, _ = await batch_llm(
-            model="google/gemini-2.5-flash-image-preview",
+            model=model,
             texts=texts,
             context="Generate stage setting images for fantasy scenes. Create detailed environmental illustrations.",
             output_is_image=True,
@@ -899,6 +1076,9 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
 
     context_str = "Generate visual concept art images. Create detailed illustrations based on the fantasy descriptions. Output: image only, no text or descriptions."
 
+    # Select model for image generation
+    model, _ = _select_model_for_step(GenerationStep.COMPONENT_IMAGES)
+
     # Split into 3 batches to avoid overwhelming the API
     batch_size = len(components) // 3 + (1 if len(components) % 3 > 0 else 0)
 
@@ -919,7 +1099,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
 
         try:
             responses, full_responses, _ = await batch_llm(
-                model="google/gemini-2.5-flash-image-preview",
+                model=model,
                 texts=batch_texts,
                 context=context_str,
                 output_is_image=True,
@@ -937,7 +1117,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
             # Debug: Try to get the actual LLM responses for failed batch
             try:
                 debug_responses, debug_full_responses, _ = await batch_llm(
-                    model="google/gemini-2.5-flash-image-preview",
+                    model=model,
                     texts=batch_texts,
                     context=context_str,
                     output_is_image=False  # Get text response to see what model returned
@@ -1043,6 +1223,9 @@ async def generate_shot_images(artifact: StoryboardSpec, prompt_input: str) -> S
 
     context_str = "Generate cinematic shot images based on the shot descriptions. Use the reference stage setting image to maintain visual consistency. Output: image only."
 
+    # Select model for image generation
+    model, _ = _select_model_for_step(GenerationStep.SHOT_IMAGES)
+
     # Split into batches to avoid overwhelming the API
     batch_size = 10
     all_responses = []
@@ -1062,7 +1245,7 @@ async def generate_shot_images(artifact: StoryboardSpec, prompt_input: str) -> S
 
         try:
             responses, _, _ = await batch_llm(
-                model="google/gemini-2.5-flash-image-preview",
+                model=model,
                 texts=batch_texts,
                 context=context_str,
                 image_paths=batch_images,

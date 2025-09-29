@@ -418,14 +418,142 @@ This document outlines the implementation of a dynamic, dependency-driven pipeli
 8. Robust error handling with retry logic
 9. Comprehensive debug logging
 
-### Phase 3: User Experience Enhancements (Next Priority)
+### ✅ Phase 3: COMPLETED (Sept 29, 2025)
+
+#### Individual Shot Description and Image Generation
+
+**1. Shot Description Generation**
+- **Challenge**: Shots needed detailed descriptions before image generation, similar to stage shots
+- **Solution**: Added `SHOT_DESCRIPTIONS` as new generation step between stage shot images and shot images
+- **Implementation**:
+  - New enum: `GenerationStep.SHOT_DESCRIPTIONS` in generation_pipeline.py:28
+  - Dependencies: Requires `STAGE_SHOT_IMAGES` and `COMPONENT_DESCRIPTIONS` completion
+  - Context DTO includes: scene info, narrative, full character/location/prop descriptions
+  - Output DTO: Returns list of shot descriptions per scene
+  - Batch processing: `generate_batch_shot_descriptions()` processes all scenes in parallel
+  - Uses GPT-5 with medium reasoning for quality shot breakdowns
+  - Currently generates 3 shots per scene (configurable for testing)
+- **Result**: Each scene now has multiple ShotSpec objects with detailed descriptions
+
+**2. Shot Image Generation with Stage Reference**
+- **Challenge**: Shot images needed both shot description AND stage setting image as context
+- **Solution**: Updated `generate_shot_images()` to accept image input for visual consistency
+- **Implementation**:
+  - Collects all shots across all scenes needing images
+  - For each shot: uses shot description + scene's stage setting image path
+  - Batch processing: 10 shots per batch to manage API load
+  - Uses Gemini 2.5 Flash with image input capability
+  - Retry logic: 2 retries per image for reliability
+  - Prompt emphasizes: "Use reference stage setting image to maintain visual consistency"
+- **Result**: Individual shot images visually consistent with their scene's stage setting
+
+**3. Pipeline Integration**
+- Updated `run_generation_pipeline()` to handle both new steps
+- Added handlers in `test_pipeline_step_by_step.py` for interactive debugging
+- Updated `script_v3.py` with user input for shot descriptions step
+- Completion check: Verifies all scenes have shots with descriptions AND images
+
+**4. Context Data Extraction**
+- Enhanced `extract_context_data()` to provide full component context for shot descriptions
+- Characters, locations, and props all passed to LLM for rich shot generation
+- Scene-specific filtering: Only relevant components per scene included
+
+**5. Updated Files**
+- `generation_pipeline.py`:
+  - Lines 20-29: Added `SHOT_DESCRIPTIONS` enum
+  - Lines 79-85: Context DTO for shot descriptions
+  - Lines 130-131: Output DTO for shot descriptions
+  - Lines 249: Updated dependencies
+  - Lines 302-308: Completion status check
+  - Lines 399-406: Context extraction for shot descriptions
+  - Lines 584-757: `generate_batch_shot_descriptions()` implementation
+  - Lines 999-1103: `generate_shot_images()` implementation
+  - Lines 1127-1130: Pipeline orchestrator handlers
+- `test_pipeline_step_by_step.py`:
+  - Lines 13: Import new functions
+  - Lines 96-99: Batch processing handlers
+  - Lines 193: Updated step order for checkpoints
+  - Lines 243: User input for shot descriptions
+- `script_v3.py`:
+  - Lines 29: User input for shot descriptions
+
+#### Current Status: 9/9 Generation Steps Working
+
+✅ **All Pipeline Steps Operational:**
+1. Lore generation (3 options, GPT-5, medium reasoning)
+2. Narrative generation (3 options, GPT-5, medium reasoning)
+3. Scenes generation (names, descriptions, sketches)
+4. Component descriptions (characters, locations, props + scene mappings)
+5. Component images (batch generation, 3 batches, 2 retries each)
+6. Stage shot descriptions (batch generation, one per scene)
+7. Stage shot images (batch generation, 2 retries each)
+8. **Shot descriptions (NEW - batch generation, 3 per scene, GPT-5)**
+9. **Shot images (NEW - batch generation, uses stage image reference)**
+
+### Phase 4: Visualization and Video Generation (Next Priority)
+
+**Outstanding Tasks:**
+
+#### 1. HTML Storyboard Visualization
+**Priority: HIGH**
+- [ ] Create `generate_html_storyboard()` function that takes StoryboardSpec
+- [ ] Function should generate single comprehensive HTML file showing:
+  - Lore and narrative sections
+  - Scene breakdowns with stage setting images
+  - Component library (characters, locations, props with images)
+  - **Main focus: Sequential shot display**
+    - All shots across all scenes in order
+    - Shot image + description side-by-side
+    - Scene context markers
+    - Shot metadata (name, scene, etc.)
+- [ ] Styling: Clean, printable format suitable for production review
+- [ ] Include navigation: Jump to scenes, components, shots
+- [ ] Export functionality: Save HTML to `data/{project_name}/storyboard.html`
+
+#### 2. Video Generation Pipeline
+**Priority: HIGH**
+- [ ] **Extend ShotSpec model** with video-specific fields:
+  - `duration_seconds`: Shot length (if not already populated)
+  - `camera_movement`: Pan, tilt, push-in, etc.
+  - `transition_type`: Cut, fade, dissolve, etc.
+  - `audio_cues`: Sound effects, dialogue, music references
+  - `motion_description`: Character/object movement within shot
+- [ ] **Create new generation step**: `SHOT_VIDEO_SPECS`
+  - Generate video-specific metadata for each shot
+  - Use shot description + stage setting as context
+  - Output: Enhanced shot specifications with video parameters
+- [ ] **Implement video generation**: `SHOT_VIDEOS` step
+  - Model: Use appropriate video generation API (Runway, Pika, etc.)
+  - Input: Shot image + motion description + duration
+  - Context: Previous/next shots for continuity
+  - Batch processing: Small batches due to video generation cost
+  - Storage: Save videos to `data/{project_name}/videos/`
+- [ ] **Update pipeline**:
+  - Add `SHOT_VIDEO_SPECS` dependency: requires `SHOT_DESCRIPTIONS`
+  - Add `SHOT_VIDEOS` dependency: requires `SHOT_VIDEO_SPECS` + `SHOT_IMAGES`
+  - Update completion status checks
+  - Add to user input configurations
+- [ ] **Video assembly**: Create function to stitch shots into scene videos
+  - Apply transitions between shots
+  - Add audio layers (music, dialogue, SFX)
+  - Export per-scene videos and full storyboard video
+
+#### 3. Enhanced HTML with Video Integration
+- [ ] Update HTML generator to embed video players for shots
+- [ ] Add video controls and playback options
+- [ ] Include video download links
+- [ ] Show both static image and video versions
+
+### Phase 5: Production Features (Future)
 
 **Future Improvements:**
-1. User choice interfaces for multi-option outputs
+1. User choice interfaces for multi-option outputs (lore/narrative selection)
 2. Web-based UI for pipeline management
 3. Performance optimization and caching
-4. Resume capability from any checkpoint
-5. Individual shot generation (step 8 of original plan)
+4. Shot editing and regeneration capabilities
+5. Audio generation and synchronization
+6. Export to professional formats (Final Draft, Adobe Premiere XML)
+7. Collaborative review and approval workflows
 
 ## Testing Strategy
 
@@ -450,4 +578,4 @@ This document outlines the implementation of a dynamic, dependency-driven pipeli
 ---
 
 *Last Updated: 2025-09-29*
-*Status: Phase 2 Complete - All 8 Core Steps Working with Robust Retry Logic*
+*Status: Phase 3 Complete - Full 9-Step Pipeline with Shot Descriptions and Images*

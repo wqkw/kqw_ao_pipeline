@@ -97,6 +97,7 @@ class StoryboardSpec(StrictModel):
     """Complete storyboard for a narrative project."""
     name: str = Field(..., description="Unique identifier for this story (e.g., 'crimson_rebellion', 'neon_dreams').")
     title: Optional[str] = Field(None, description="Official story title as it appears to audiences.")
+    logline: Optional[str] = Field(None, description="Brief story outline capturing the core concept, protagonist, conflict, and stakes in a compelling summary.")
     lore: Optional[str] = Field(None, description="Background worldbuilding including history, rules, cultures, technologies, and context needed to understand the world.")
     narrative: Optional[str] = Field(None, description="Plot structure, character arcs, themes, conflicts, and how the story progresses from start to finish.")
     moodboard_path: Optional[str] = Field(None, description="File path to visual moodboard showing aesthetic style, color palette, and atmosphere.")

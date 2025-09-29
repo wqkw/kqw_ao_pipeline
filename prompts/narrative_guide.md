@@ -1,178 +1,93 @@
-# Guide to different types of narratives
+# NARRATIVE GENERATION GUIDE (Step 3 — after logline & lore are locked)
 
-# 1) Archetypal plot arcs (what the story *does*)
-
-* **Overcoming the Monster**
-
-  * Variants: external beast/antagonist • systemic/organizational “monster” • inner demon/addiction.
-  * Beats: threat signaled → first clash fails → learn/gather tools → breach lair → death-match → return with proof.
-* **Rags to Riches**
-
-  * Variants: pure ascent • ascent→fall→true ascent (after values-test) • false victory (hollow success).
-  * Beats: ordinary lack → break/opportunity → early wins → arrogance/backlash → humbling → earned status.
-* **The Quest**
-
-  * Variants: fetch quest (clear MacGuffin) • pilgrimage (internal change) • rescue (time pressure).
-  * Beats: call → team assemble → trials/waystations → dark route/guardians → boon secured → hard way home.
-* **Voyage & Return**
-
-  * Variants: wonderland (rules discovery) • culture clash (assimilation) • survival (hostile environment).
-  * Beats: crossing into strange realm → misread rules → mastery at a cost → escape attempt → re-entry changed.
-* **Comedy**
-
-  * Variants: misrecognition/identity play • matchmaker engines • society out of joint → restored.
-  * Beats: tangled webs → mounting complications → “mask off” revelations → reconciliations → new social order.
-* **Tragedy**
-
-  * Variants: fatal flaw recognized too late • noble sacrifice that fails • corruption arc (slow rot).
-  * Beats: rise on flawed premise → warnings ignored → point of no return → irreversible harm → recognition → collapse.
-* **Rebirth**
-
-  * Variants: seasonal thaw (soft reset) • intervention/grace encounter • near-death literal or social.
-  * Beats: stagnation/curse → encounter with catalyst → resistance → ego death → renewal with altered identity.
-
-# 2) Emotional “shapes” (how fortune rises/falls)
-
-* **Rise (Rags-to-Riches)**: lack → lift → test of values → consolidation.
-* **Fall (Tragedy)**: early strength → misjudgment → accelerating costs → ruin.
-* **Fall→Rise (“Hole→Out”)**: disruption → descent/alienation → insight → reconstructed life.
-* **Rise→Fall (“Icarus”)**: meteoric ascent → hubris → snap reversal → consequence settling.
-* **Rise→Fall→Rise (“Cinderella”)**: gift/chance → loss/exile → return/recognition.
-* **Fall→Rise→Fall (“Oedipal Zigzag”)**: partial recovery → fatal discovery → second collapse.
-* Dial knobs you can set: where the **true pivot** sits (pre-midpoint / midpoint / late), whether the **lowest low** precedes insight, and if the end-state is **stable** or **ambiguous**.
-
-# 3) Journey cycles (quest/return beat engines)
-
-* **Monomyth (Hero’s Journey, 17-ish moves)**
-
-  * Departure: call → refusal → mentor → threshold → belly of the whale.
-  * Initiation: trials/allies/enemies → approach → ordeal → reward.
-  * Return: road back → resurrection → return with elixir.
-  * Useful toggles: “mentor-light” (knowledge found, not given) • “two thresholds” (public vs private).
-* **12-Stage Writer’s Journey (streamlined)**
-
-  * Ordinary world → call → refusal → mentor → break into special world → tests/allies/enemies → approach → ordeal → reward → road back → resurrection → return.
-  * Dial: compress tests into montage • move “mentor” post-threshold as a guardian.
-* **Story Circle (8 steps)**
-
-  * You (comfort) → Need (desire named) → Go (cross line) → Search (trial/learn) → Find (get it) → Take (pay price) → Return (come back) → Change (integrate).
-  * Micro-beats per step: decision • action • feedback • adjustment.
-* **15-Beat Commercial Beat Sheet**
-
-  * Opening image → theme stated → setup → catalyst → debate → break-into-2 → B-story → fun & games (promise of premise) → midpoint (win/lose + stakes shift) → bad guys close in → all is lost → dark night → break-into-3 → finale (plan → execution → new order) → final image.
-  * Knobs: “false victory” midpoint vs “false defeat” midpoint; finale framed as team plan or single gambit.
-
-# 4) Act-based dramatic spines (page-level scaffolding)
-
-* **Three-Act**
-
-  * Act I: setup + inciting incident + lock-in (no return).
-  * Act II: complications → midpoint reversal → pinch points that squeeze → crisis decision.
-  * Act III: climactic confrontation → outcome → resolution.
-* **Five-Act / Freytag**
-
-  * Exposition → rising action (two escalations) → climax (decision + turn) → falling action (aftershocks) → denouement (new equilibrium).
-  * Additions: “mirror midpoint” scene • “obligatory scene” promised by premise.
-
-# 5) Non-Western progressions (contrast & cadence)
-
-* **Kishōtenketsu (Qi-Cheng-Zhuan-He)**
-
-  * Intro → development (elaboration) → **turn** (new element reframing prior beats) → conclusion (harmonization).
-  * Turn types: perspective flip • rule reveal • metaphor echo • detail recontextualization (no antagonist required).
-* **Jo-Ha-Kyū (Begin-Break-Rush)**
-
-  * Jo: calm establishment and motif.
-  * Ha: fracture/variation; tempo and stakes lift in waves.
-  * Kyū: compressed, decisive finish; no long denouement.
-  * Dials: how sharply Ha fractures; whether Kyū resolves cleanly or with a sting.
-
-# 6) Investigation-forward progressions (mystery engines)
-
-* **Whodunit**
-
-  * Subtypes: closed-circle (finite suspects) • procedural (institutional method) • fair-play puzzle (clued for audience).
-  * Beats: crime & question posed → evidence passes (red herrings planted) → mid-theory that fails → narrowing field → reveal (method + culprit) → reconstruction.
-* **Howcatchem (Inverted)**
-
-  * Beats: show crime & culprit → investigator fixates on anomaly → battle of wits (cat-and-mouse setpieces) → trap construction → public catch/exposure → ethical afterbeat.
-* **Whydunit**
-
-  * Beats: outcome known → back-tracking motives → confession precipitated by emotional key → meaning reframed more than facts.
-* Add-ons: ticking clock • second body raising stakes • unreliable witness • locked-room constraint.
-
-# 7) Ensemble & perspective weaves (how threads braid)
-
-* **Network/Hyperlink**
-
-  * Patterns: hub-and-spokes (one nexus) • ring (A→B→C→…→A) • lattice (many small crossings).
-  * Beats: introduce nodes with motif → crossovers tighten causality → convergence event → distributed resolution (new network state).
-* **Braided Dual (or Triple) Protagonists**
-
-  * Alternating arcs with mirrored beats (two midpoints speak to each other) → collision → fused climax → negotiated denouement.
-* **Rashomon-Style Multi-Account**
-
-  * Beats: baseline incident → testimony A (frame/agenda) → testimony B (conflict) → synthesis pass (which truths persist?) → adjudication or ambiguity preserved.
-* **Relay/Baton-Pass**
-
-  * One POV carries act; baton passes at crisis → each pass changes stakes or knowledge; ensemble finale requires contributions from multiple prior POV arcs.
-* **Chorus/Mosaic**
-
-  * Many shorts orbit a theme; progress by accumulation rather than causality; final movement aggregates meaning.
-
-# 8) Time & frame patterns (ordering as engine)
-
-* **Frame/Nesting**
-
-  * Outer narrator sets premise → inner tale(s) unfold → returns that comment or invert frame; recursion depth can mirror theme (story about storytelling).
-* **Reverse Chronology**
-
-  * End state first → stepwise earlier reveals; beats designed as successive “because” answers; final beat shows the true beginning cause.
-* **Time-Loop**
-
-  * Subtypes: perfect reset • memory accrual for lead only • world remembers prior cycles • branching loop (changes persist).
-  * Beats: first bewilderment loop → rules discovery → exploitation montage → moral/meaning test → exit condition triggered or acceptance.
-* **Forking Paths/Alternates**
-
-  * Beats: choice point → branch montage → cross-branch echoes → convergence (or deliberate non-convergence).
-* **Fractured Timeline Mystery**
-
-  * Two (or more) intercut timelines → hidden hinge scene reveals how they interlock → re-read prior beats with new understanding.
-
-# 9) Goal-engineered missions (heists, capers, ops)
-
-* **Heist/Caper Spine**
-
-  * Beats: motive/need → assemble specialized crew → intel and plan (with explicit contingencies) → rehearsal or dry run → execution (live complications force improvisations) → reveal layer (what we didn’t know about the plan) → fallout/aftermath (who gets what).
-  * Variants: double-cross ladder • long con (confidence cycle) • smash-and-grab (pure kinetics).
-* **Team Operation**
-
-  * Beats: objective brief → role assignment → parallel sub-ops (A/B/C threads with interdependence) → choke-point convergence → extract/cleanup.
-* **Bottle Mission**
-
-  * Constrained space/time; progress via resource depletion and inventive re-use; the “plan” forms mid-mission.
-
-# 10) Formal morphology (atomic move sets to generate beats)
-
-* **Proppian Function Clusters (31 functions compressed)**
-
-  * Preparation: interdiction → violation → reconnaissance by villain.
-  * Villainy & Lack: harm or lack identified → dispatch/decision to quest.
-  * Donor Sequence: donor test → hero’s reaction → receipt of magical aid.
-  * Guidance: journey → struggle → branding/wounding (mark of trial).
-  * Victory & Liquidation: villain defeated → initial lack resolved.
-  * Return: pursuit → rescue → unrecognized return → unfounded claims by false hero → difficult task → solution → recognition → exposure of false hero → transfiguration → punishment → wedding/new order.
-  * Use: treat these as **plug-in steps** to invent missing beats within any spine above.
+**Purpose**  
+Transform the premise and world bible into a causal spine and sequence plan that can be executed. Focus on *decision pressure*: each beat forces a choice that raises cost or narrows options, cashing the promise of the premise. Leave shot design, lighting, and prop choreography to specialized agents; only specify thematically essential motifs when they are inseparable from the story’s argument.
 
 ---
 
-## Quick ways to pick & combine
+## Choose a story spine & emotional shape (declare the tools)
+Select a beat engine (e.g., Story Circle 8; 15-beat commercial scaffold; investigation lattice) that best expresses the logline’s conflict. Pair it with an **emotional trajectory** (rise, fall, fall-rise, zigzag). State why this pairing fits *this* premise and *these* pillars; the midpoint should pivot the emotional vector, not merely deliver information.
 
-* Choose **one arc** from §1 + **one shape** from §2 to define *what* changes and *how it feels*.
-* Snap on a **beat engine** from §3/§4 to pace it.
-* If your premise is investigation-first, swap the beat engine for §6.
-* For multi-thread projects, start with §7, then assign each thread its own mini-shape from §2.
-* If you want elegance without constant conflict, try §5.
-* When stuck, open §10 and pick the next plausible **function** to advance the progression.
+---
 
-If you give me your premise, tone (e.g., tragic vs redemptive), and format (e.g., 90s feature, 10×2-min episodes), I’ll snap together a custom beat outline using this hierarchy.
+## Build a causal beat grid
+- **Therefore/But logic:** every unit moves because the last one forced it.  
+- **Act I:** establish ordinary operation under the world’s rules, lock the public goal, cross a no-return.  
+- **Act II:** escalate through reversals and pinch points that explicitly exploit **Cost/Limit/Counter** from the lore’s systems; midpoint redefines the meaning of victory or exposes a hidden cost.  
+- **Act III:** stage the decisive value choice implied by the logline’s irony; pay setups; end on an image that rhymes with the opening with altered moral charge.
+
+Keep beats **performable** without prescribing camera or lighting decisions.
+
+---
+
+## Sequence planning (units bigger than scenes)
+Group beats into **sequences** with identifiable mini-goals and failure modes. For each sequence, ensure you can articulate:
+- **Objective under a clock,** visible to the audience.  
+- **Opposition method** tied to a system (law/tech/ecology) so consequences are specific.  
+- **Risked resource** (time, status, leverage, memory, fuel).  
+- **State change** that hands the next sequence its starting gun.
+
+Avoid enumerating scene minutiae; the Scenes Agent will fracture sequences into discrete scenes.
+
+---
+
+## Character engines that generate plot
+For each principal:
+- **Want / Need** (external pursuit vs internal correction).  
+- **Flaw / Skill** (the tool that wins Act I costs Act II).  
+- **Cost to win** (what they must spend).  
+- **Cross-pressures** (two values they care about colliding).  
+- **Relational geometry** (rivalry, mentorship, duty, romance) that guarantees conflict without specifying blocking.
+
+---
+
+## Thematic argument without speeches
+Frame theme as a **contest of claims** (e.g., safety vs freedom). Let both sides win credible scenes. Import **Contradictory Truths** from lore so choices—not monologues—award points. Use **recurring motifs** sparingly and only where they crystallize the argument (e.g., a registry stamp that begins as salvation and ends as erasure).
+
+---
+
+## Promise-of-the-premise economy
+List the signature kinds of sequences the audience expects given the logline and pillars (e.g., audit-day gambit, curfew run, quota tribunal). Ensure variety in **verbs** (chase, con, debate, siege, escape) and **scale** (intimate → public). Each should **spend** a resource and **earn** a new one (proof, key, leverage). Do not pre-decide scene blocking or shot texture.
+
+---
+
+## Mystery & question threads (if applicable)
+Translate vagueness into a **chain of questions** answerable only through risky actions. Pre-decide the **evidence type** (object, confession, procedural result) for each answer so payoffs feel inevitable rather than convenient.
+
+---
+
+## Pacing, clocks, and compression
+Install **visible clocks** (audit cycles, ferries, sunrise windows). Use **late entry/early exit** and **scene amalgamation** for momentum. Insert breathers that still *do work* (relationship turns, plant-heavy banter). Keep all guidance at the level of timing and consequence, not shot craft.
+
+---
+
+## Checks & balances
+- **Power Audit:** any use of abilities honors **Cost / Limit / Counter**; if a late beat bends a rule, the price is brutal.  
+- **Plant/Payoff ledger:** no plant without payoff, no payoff without plant.  
+- **Stakes ladder:** escalate personal → relational → societal (as appropriate) without losing intimacy.  
+- **Continuity of motive:** a character’s swerve must be traceable to new pressure or information from the prior unit.
+
+---
+
+## Diagnostics
+- If you can reorder three adjacent beats without damage, you may have “and-then” plotting—strengthen opposition methods.  
+- If removing a pillar doesn’t collapse your second act, your world isn’t actually driving story.  
+- If the midpoint doesn’t reprice victory, it’s just a big scene; find the value flip.  
+- If you can’t retell the story in verbs, objectives are mushy.
+
+---
+
+## Common failure modes & fixes
+- **Speeching theme:** ideas stated instead of argued through consequence. → Force value collisions with real loss on both sides.  
+- **Midpoint sag:** information arrives but stakes do not pivot. → Reveal a hidden cost or flip a pillar’s meaning.  
+- **Climax with no echo:** ending image unrelated to beginning. → Reuse the opening motif under a new moral polarity.  
+- **World as wallpaper:** rules never bite. → Inject a procedural obstacle from a pillar at every sequence hinge.
+
+---
+
+## Notes from craft
+- **Mamet:** scenes exist to win objectives under opposition; if you can’t state those, you don’t have drama.  
+- **Snyder:** protect space for “fun & games”—the world’s unique rules must *do work* in the middle.  
+- **Field/McKee:** turning points are earned by choices, not weather; structure is meaning over time.  
+- **Vogler/Truby:** inner change should be *expensive*—tie the price to your lore’s costs so theme and plot fuse.  
+- **Pixar wisdom:** simplify, focus, combine; keep the audience slightly ahead, then slightly behind, in satisfying rhythm.

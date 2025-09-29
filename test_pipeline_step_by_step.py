@@ -52,6 +52,28 @@ def print_step_info(step: GenerationStep, artifact: StoryboardSpec, user_input: 
     except Exception as e:
         print(f"\nEXTRACTED CONTEXT DATA: Error - {e}")
 
+    # Show additional context for LOGLINE step
+    if step == GenerationStep.LOGLINE:
+        from generation_pipeline import _read_logline_guide
+        logline_guide = _read_logline_guide()
+        if logline_guide:
+            # Show first 500 characters of logline guide
+            guide_preview = logline_guide[:500] + "..." if len(logline_guide) > 500 else logline_guide
+            print(f"\nLOGLINE GENERATION GUIDE (preview):")
+            print(f"  {guide_preview}")
+            print(f"\n  [Full guide length: {len(logline_guide)} chars]")
+
+    # Show additional context for LORE step
+    if step == GenerationStep.LORE:
+        from generation_pipeline import _read_lore_guide
+        lore_guide = _read_lore_guide()
+        if lore_guide:
+            # Show first 500 characters of lore guide
+            guide_preview = lore_guide[:500] + "..." if len(lore_guide) > 500 else lore_guide
+            print(f"\nLORE GENERATION GUIDE (preview):")
+            print(f"  {guide_preview}")
+            print(f"\n  [Full guide length: {len(lore_guide)} chars]")
+
     # Show current artifact state
     completion_status = get_completion_status(artifact)
     print(f"\nCURRENT COMPLETION STATUS:")
@@ -109,7 +131,9 @@ async def run_single_step(artifact: StoryboardSpec, step: GenerationStep, user_i
             artifact = patch_artifact(artifact, step, output, user_choice=0)
 
             # Debug: Show what was patched
-            if step == GenerationStep.LORE:
+            if step == GenerationStep.LOGLINE:
+                print(f"   Logline set: {len(artifact.logline)} characters")
+            elif step == GenerationStep.LORE:
                 print(f"   Lore set: {len(artifact.lore)} characters")
             elif step == GenerationStep.NARRATIVE:
                 print(f"   Narrative set: {len(artifact.narrative)} characters")
@@ -141,6 +165,8 @@ async def run_single_step(artifact: StoryboardSpec, step: GenerationStep, user_i
 
     # Show updated artifact summary
     print(f"\n📊 ARTIFACT SUMMARY AFTER {step.value}:")
+    if artifact.logline:
+        print(f"  - Logline: {len(artifact.logline)} chars")
     if artifact.lore:
         print(f"  - Lore: {len(artifact.lore)} chars")
     if artifact.narrative:
@@ -189,8 +215,8 @@ def load_latest_artifact(project_name: str) -> StoryboardSpec:
     if not checkpoints:
         return None
 
-    # Sort by step order (lore, narrative, scenes, etc.)
-    step_order = ["lore", "narrative", "scenes", "component_descriptions", "component_images", "stage_shot_descriptions", "stage_shot_images", "shot_descriptions", "shot_images"]
+    # Sort by step order (logline, lore, narrative, scenes, etc.)
+    step_order = ["logline", "lore", "narrative", "scenes", "component_descriptions", "component_images", "stage_shot_descriptions", "stage_shot_images", "shot_descriptions", "shot_images"]
 
     def step_priority(path):
         filename = os.path.basename(path)
@@ -211,7 +237,7 @@ def load_latest_artifact(project_name: str) -> StoryboardSpec:
 
 
 async def main():
-    project_name = "test_cobalt"
+    project_name = "test_rbl"
 
     # Try to load existing artifact first
     artifact = load_latest_artifact(project_name)
@@ -226,14 +252,15 @@ async def main():
     if not artifact:
         artifact = StoryboardSpec(
             name=project_name,
-            title="Test Cobalt Rebellion",
+            title="Test rbl",
             moodboard_path="data/moodboard_tile.png"
         )
         print(f"🆕 Starting new artifact: {artifact.title}")
 
     # Define user inputs for each step
     user_inputs = {
-        GenerationStep.LORE: "Dark fantasy with ancient magic and warring kingdoms",
+        GenerationStep.LOGLINE: "Generate story logline options based on the moodboard's visual style and aesthetic",
+        GenerationStep.LORE: "Generate lore given the vibes and aesthetics of the moodboard",
         GenerationStep.NARRATIVE: "Hero's journey with betrayal and redemption",
         GenerationStep.SCENES: "Break into dramatic scenes with clear emotional arcs",
         GenerationStep.COMPONENT_DESCRIPTIONS: "Identify all props and environmental elements",
