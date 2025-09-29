@@ -6,6 +6,7 @@ import asyncio
 import aiohttp
 import time
 import random
+from datetime import datetime
 from typing import Optional, Union, List, Type, Tuple, Dict, Any
 from pydantic import BaseModel
 
@@ -16,6 +17,28 @@ except ImportError:
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high"]
 
+def _log_llm_call(start_time: datetime, end_time: datetime, tokens_in: int, tokens_out: int, function_name: str, prompt_preview: str):
+    """Log LLM call information to log.txt"""
+    duration = (end_time - start_time).total_seconds()
+    log_line = f"{start_time.strftime('%Y-%m-%d %H:%M:%S')} | {function_name} | Duration: {duration:.2f}s | Tokens In: {tokens_in} | Tokens Out: {tokens_out} | Prompt: {prompt_preview}\n"
+
+    with open("llm_log.txt", "a", encoding="utf-8") as f:
+        f.write(log_line)
+
+def _count_tokens_in_messages(messages: List[Dict[str, Any]]) -> int:
+    """Rough token count estimation for input messages"""
+    total_chars = 0
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    total_chars += len(item.get("text", ""))
+    # Rough estimation: ~4 characters per token
+    return total_chars // 4
+
 def llm(
     model: str,
     text: str,
@@ -25,6 +48,7 @@ def llm(
     reasoning_exclude: bool = True,
     response_format: Optional[Type[BaseModel]] = None,
     output_is_image: bool = False,
+    logging: bool = True,
 ) -> Tuple[Union[str, bytes], dict, List[Dict[str, Any]]]:
     """
     OpenRouter API wrapper function
@@ -39,11 +63,14 @@ def llm(
         reasoning_exclude: If True (default), request that intermediate reasoning not be returned.
         response_format: Optional Pydantic model class for structured output
         output_is_image: If True, expects the response to contain base64 image data and returns decoded bytes
+        logging: If True (default), log call details to log.txt
 
     Returns:
         Tuple of (message_content: Union[str, bytes], full_response: dict, message_history: List[Dict[str, Any]])
         If output_is_image is True, message_content will be bytes (decoded base64 image data)
     """
+    start_time = datetime.now() if logging else None
+
     api_key = os.getenv('OPENROUTER_API_KEY')
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY environment variable not found")
@@ -162,6 +189,15 @@ def llm(
     updated_messages = messages.copy()
     updated_messages.append(assistant_message)
 
+    # Log the call if logging is enabled
+    if logging and start_time:
+        end_time = datetime.now()
+        usage = full_response.get('usage', {})
+        tokens_in = usage.get('prompt_tokens') or _count_tokens_in_messages(messages)
+        tokens_out = usage.get('completion_tokens', 0)
+        prompt_preview = text[:20] + "..." if len(text) > 20 else text
+        _log_llm_call(start_time, end_time, tokens_in, tokens_out, "llm", prompt_preview)
+
     return message_content, full_response, updated_messages
 
 
@@ -174,10 +210,14 @@ async def llm_async(
     reasoning_exclude: bool = True,
     response_format: Optional[Type[BaseModel]] = None,
     output_is_image: bool = False,
+    logging: bool = True,
+    _caller: str = "async",
 ) -> Tuple[Union[str, bytes], dict, List[Dict[str, Any]]]:
     """
     Async version of the OpenRouter API wrapper function
     """
+    start_time = datetime.now() if logging else None
+
     api_key = os.getenv('OPENROUTER_API_KEY')
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY environment variable not found")
@@ -297,6 +337,15 @@ async def llm_async(
     updated_messages = messages.copy()
     updated_messages.append(assistant_message)
 
+    # Log the call if logging is enabled
+    if logging and start_time:
+        end_time = datetime.now()
+        usage = full_response.get('usage', {})
+        tokens_in = usage.get('prompt_tokens') or _count_tokens_in_messages(messages)
+        tokens_out = usage.get('completion_tokens', 0)
+        prompt_preview = text[:20] + "..." if len(text) > 20 else text
+        _log_llm_call(start_time, end_time, tokens_in, tokens_out, _caller, prompt_preview)
+
     return message_content, full_response, updated_messages
 
 
@@ -309,6 +358,7 @@ async def batch_llm(
     reasoning_exclude: bool = True,
     response_format: Optional[Type[BaseModel]] = None,
     output_is_image: bool = False,
+    logging: bool = True,
 ) -> Tuple[List[Union[str, BaseModel, bytes]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Process multiple LLM requests asynchronously
@@ -322,6 +372,7 @@ async def batch_llm(
         reasoning_exclude: Shared reasoning exclude setting
         response_format: Shared response format for all requests
         output_is_image: If True, decode base64 image data from responses
+        logging: If True (default), log call details to log.txt for each request
 
     Returns:
         Tuple of (responses: List[Union[str, BaseModel, bytes]], full_responses: List[Dict[str, Any]], combined_history: List[Dict[str, Any]])
@@ -345,6 +396,8 @@ async def batch_llm(
             reasoning_exclude=reasoning_exclude,
             response_format=response_format,
             output_is_image=output_is_image,
+            logging=logging,
+            _caller="batch",
         )
         tasks.append(task)
 
