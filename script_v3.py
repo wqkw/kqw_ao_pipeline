@@ -3,8 +3,7 @@
 import asyncio
 from dotenv import load_dotenv
 
-from prompts.storyboard_artifact import StoryboardSpec
-from generation_pipeline import GenerationStep, run_generation_pipeline
+from storyboard_core import StoryboardSpec, GenerationStep, run_generation_pipeline
 
 load_dotenv()
 

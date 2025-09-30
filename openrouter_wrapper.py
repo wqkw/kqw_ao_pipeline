@@ -40,6 +40,31 @@ def _count_tokens_in_messages(messages: List[Dict[str, Any]]) -> int:
     return total_chars // 4
 
 
+def _convert_image_to_data_url(path: str) -> str:
+    """Convert local image path to base64 data URL.
+
+    Args:
+        path: Local file path or URL
+
+    Returns:
+        Data URL string (either original URL or base64-encoded image)
+    """
+    # If already a URL, return as-is
+    if path.startswith(('http://', 'https://', 'data:')):
+        return path
+
+    # Otherwise, treat as local file path and convert to base64
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(path)
+    if mime_type is None:
+        mime_type = "image/png"  # Default to PNG
+
+    with open(path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    return f"data:{mime_type};base64,{image_data}"
+
+
 def _build_messages(
     context: Optional[Union[str, List[Dict[str, Any]]]],
     text: str,
@@ -50,7 +75,7 @@ def _build_messages(
     Args:
         context: System message (string) or conversation history (list)
         text: User's text prompt
-        input_image_path: Optional image URL(s) to include
+        input_image_path: Optional image path(s) - can be local file paths or URLs
 
     Returns:
         List of message dicts ready for API
@@ -69,10 +94,12 @@ def _build_messages(
 
     if input_image_path:
         if isinstance(input_image_path, str):
-            content.append({"type": "image_path", "image_path": {"url": input_image_path}})
+            url = _convert_image_to_data_url(input_image_path)
+            content.append({"type": "image_url", "image_url": {"url": url}})
         elif isinstance(input_image_path, list):
-            for url in input_image_path:
-                content.append({"type": "image_path", "image_path": {"url": url}})
+            for path in input_image_path:
+                url = _convert_image_to_data_url(path)
+                content.append({"type": "image_url", "image_url": {"url": url}})
 
     messages.append({"role": "user", "content": content})
     return messages

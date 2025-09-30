@@ -1,5 +1,5 @@
 # IMPORTANT must follow guidelines:
-- For structured output DTOs, all Pydantic models MUST include:
+- For structured output DTOs being used for the llm, all Pydantic models MUST include:
 model_config = {"extra": "forbid"} or subclass
 class StrictModel(BaseModel):
     """Base model that rejects unknown fields to keep outputs clean."""

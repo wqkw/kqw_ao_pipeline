@@ -4,10 +4,10 @@ import asyncio
 import json
 from dotenv import load_dotenv
 
-from prompts.storyboard_artifact import StoryboardSpec
-from generation_pipeline import (
+from storyboard_core import (
+    StoryboardSpec,
     GenerationStep, get_completion_status, get_next_steps,
-    create_context_dto, create_output_dto, extract_context_data,
+    extract_context_dto, context_dto_to_string, create_output_dto,
     patch_artifact, generate_step, generate_batch_components,
     generate_batch_stage_shots, generate_stage_shot_images,
     generate_batch_shot_descriptions, generate_shot_images,
@@ -23,11 +23,23 @@ def print_step_info(step: GenerationStep, artifact: StoryboardSpec, user_input: 
     print(f"STEP: {step.value.upper()}")
     print("="*80)
 
-    # Show context DTO structure
-    ContextModel = create_context_dto(step)
-    print(f"\nCONTEXT DTO FIELDS:")
-    for field_name, field_info in ContextModel.model_fields.items():
-        print(f"  - {field_name}: {field_info.annotation} - {field_info.description}")
+    # Show context DTO with extracted data
+    try:
+        context = extract_context_dto(artifact, step, prompt_input=user_input)
+        print(f"\nCONTEXT DTO FIELDS:")
+        for field_name, field_info in context.model_fields.items():
+            print(f"  - {field_name}: {field_info.annotation} - {field_info.description}")
+
+        print(f"\nEXTRACTED CONTEXT DATA:")
+        context_str = context_dto_to_string(context)
+        # Show preview of context string
+        if len(context_str) > 500:
+            print(f"  {context_str[:500]}...")
+            print(f"  [Full context length: {len(context_str)} chars]")
+        else:
+            print(f"  {context_str}")
+    except Exception as e:
+        print(f"\nCONTEXT DTO ERROR: {e}")
 
     # Show output DTO structure
     OutputModel = create_output_dto(step)
@@ -38,24 +50,10 @@ def print_step_info(step: GenerationStep, artifact: StoryboardSpec, user_input: 
     else:
         print(f"\nOUTPUT: Image generation step (no structured output)")
 
-    # Show extracted context data
-    try:
-        context_data = extract_context_data(artifact, step, prompt_input=user_input)
-        print(f"\nEXTRACTED CONTEXT DATA:")
-        for key, value in context_data.items():
-            if isinstance(value, str) and len(value) > 100:
-                print(f"  - {key}: {value[:100]}...")
-            elif isinstance(value, list) and len(value) > 5:
-                print(f"  - {key}: [{len(value)} items] {value[:3]}...")
-            else:
-                print(f"  - {key}: {value}")
-    except Exception as e:
-        print(f"\nEXTRACTED CONTEXT DATA: Error - {e}")
-
     # Show additional context for LOGLINE step
     if step == GenerationStep.LOGLINE:
-        from generation_pipeline import _read_logline_guide
-        logline_guide = _read_logline_guide()
+        from storyboard_core.pipeline import _read_guide
+        logline_guide = _read_guide("prompts/logline_guide.md")
         if logline_guide:
             # Show first 500 characters of logline guide
             guide_preview = logline_guide[:500] + "..." if len(logline_guide) > 500 else logline_guide
@@ -65,14 +63,25 @@ def print_step_info(step: GenerationStep, artifact: StoryboardSpec, user_input: 
 
     # Show additional context for LORE step
     if step == GenerationStep.LORE:
-        from generation_pipeline import _read_lore_guide
-        lore_guide = _read_lore_guide()
+        from storyboard_core.pipeline import _read_guide
+        lore_guide = _read_guide("prompts/lore_guide.md")
         if lore_guide:
             # Show first 500 characters of lore guide
             guide_preview = lore_guide[:500] + "..." if len(lore_guide) > 500 else lore_guide
             print(f"\nLORE GENERATION GUIDE (preview):")
             print(f"  {guide_preview}")
             print(f"\n  [Full guide length: {len(lore_guide)} chars]")
+
+    # Show additional context for NARRATIVE step
+    if step == GenerationStep.NARRATIVE:
+        from storyboard_core.pipeline import _read_guide
+        narrative_guide = _read_guide("prompts/narrative_guide.md")
+        if narrative_guide:
+            # Show first 500 characters of narrative guide
+            guide_preview = narrative_guide[:500] + "..." if len(narrative_guide) > 500 else narrative_guide
+            print(f"\nNARRATIVE GENERATION GUIDE (preview):")
+            print(f"  {guide_preview}")
+            print(f"\n  [Full guide length: {len(narrative_guide)} chars]")
 
     # Show current artifact state
     completion_status = get_completion_status(artifact)
@@ -260,7 +269,7 @@ async def main():
     # Define user inputs for each step
     user_inputs = {
         GenerationStep.LOGLINE: "Generate story logline options based on the moodboard's visual style and aesthetic",
-        GenerationStep.LORE: "Generate lore given the vibes and aesthetics of the moodboard",
+        GenerationStep.LORE: "Generate lore given the vibes and aesthetics of the moodboard and logline",
         GenerationStep.NARRATIVE: "Hero's journey with betrayal and redemption",
         GenerationStep.SCENES: "Break into dramatic scenes with clear emotional arcs",
         GenerationStep.COMPONENT_DESCRIPTIONS: "Identify all props and environmental elements",
