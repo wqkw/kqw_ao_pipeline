@@ -81,66 +81,55 @@ def create_moodboard_tile():
 
     print(f"Found {len(image_files)} images")
 
-    # Calculate grid dimensions for approximately 3:2 ratio
-    num_images = len(image_files)
+    # Parse coordinates from filenames and load images
+    image_data = []  # List of (row, col, image) tuples
+    target_width = 400
+    max_row = 0
+    max_col = 0
 
-    # Find optimal grid dimensions
-    # Start with square root and adjust to get close to 3:2 ratio (2 wide, 3 tall)
-    # For 3:2 ratio, we want cols/rows ≈ 2/3, so rows should be about 1.5 * cols
-    sqrt_images = math.sqrt(num_images)
-
-    # Try different column counts around the square root
-    best_cols = max(1, int(sqrt_images))
-    best_rows = (num_images + best_cols - 1) // best_cols
-    best_diff = float('inf')
-    target_ratio = 2/3  # cols/rows ratio we want
-
-    for cols in range(max(1, int(sqrt_images * 0.5)), min(num_images, int(sqrt_images * 2)) + 1):
-        rows = (num_images + cols - 1) // cols  # Ceiling division
-        current_ratio = cols / rows
-        diff = abs(current_ratio - target_ratio)
-        if diff < best_diff:
-            best_diff = diff
-            best_cols = cols
-            best_rows = rows
-
-    cols = best_cols
-    rows = best_rows
-    print(f"Using {cols}x{rows} grid for {num_images} images")
-
-    # Load and resize images to reduce file size
-    images = []
-    target_width = 400  # Reduced from original size
-
-    for img_path in image_files:  # Use all images
+    for img_path in image_files:
         try:
-            with Image.open(img_path) as img:
-                # Verify image can be loaded
-                img.load()
+            # Extract filename from path
+            filename = os.path.basename(img_path)
+            # Parse coordinates from filename (format: XX_YY.png)
+            coords = filename.replace('.png', '').split('_')
+            if len(coords) != 2:
+                print(f"Warning: Skipping file with invalid name format: {filename}")
+                continue
 
-                # Calculate height to maintain aspect ratio
+            row = int(coords[0])
+            col = int(coords[1])
+            max_row = max(max_row, row)
+            max_col = max(max_col, col)
+
+            # Load and resize image
+            with Image.open(img_path) as img:
+                img.load()
                 aspect_ratio = img.height / img.width
                 target_height = int(target_width * aspect_ratio)
-
-                # Resize image
                 resized_img = img.resize((target_width, target_height), Image.LANCZOS)
-                images.append(resized_img)
-        except (OSError, IOError) as e:
-            print(f"Warning: Skipping corrupted image {img_path}: {e}")
+                image_data.append((row, col, resized_img))
+                print(f"Loaded {filename} at position ({row}, {col})")
+
+        except (OSError, IOError, ValueError) as e:
+            print(f"Warning: Skipping corrupted or invalid image {img_path}: {e}")
             continue
 
-    if not images:
+    if not image_data:
         print("No valid images found after filtering corrupted files")
         return None
 
-    print(f"Successfully loaded {len(images)} valid images")
+    # Grid dimensions based on actual coordinates
+    rows = max_row + 1
+    cols = max_col + 1
+    print(f"Grid dimensions: {cols} cols x {rows} rows")
 
     # Calculate dimensions for the tiled image
     separator_width = 20
 
-    # Assume all images have similar dimensions (use first image as reference)
-    img_width = images[0].width
-    img_height = images[0].height
+    # Use first image as reference for dimensions
+    img_width = image_data[0][2].width
+    img_height = image_data[0][2].height
 
     # Calculate total dimensions
     total_width = (cols * img_width) + ((cols - 1) * separator_width)
@@ -149,15 +138,13 @@ def create_moodboard_tile():
     # Create the final tiled image with black background
     tiled_image = Image.new('RGB', (total_width, total_height), color='black')
 
-    # Place images in grid
-    for idx, img in enumerate(images):
-        row = idx // cols
-        col = idx % cols
-
+    # Place images at their specified coordinates
+    for row, col, img in image_data:
         x = col * (img_width + separator_width)
         y = row * (img_height + separator_width)
 
         tiled_image.paste(img, (x, y))
+        print(f"Placed image at grid position ({row}, {col}) -> pixel position ({x}, {y})")
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -210,16 +197,54 @@ def upload_to_s3(file_path):
 
 
 if __name__ == "__main__":
+    # Create ref_moodboard directory if it doesn't exist
+    os.makedirs(REF_MOODBOARD_DIR, exist_ok=True)
+
     df = query_moodboard_collection_item()
+    df = df.dropna(how = 'any')
+
+    # Calculate grid dimensions for approximately 3:2 ratio
+    num_images = len(df)
+    sqrt_images = math.sqrt(num_images)
+
+    # Try different column counts around the square root
+    best_cols = max(1, int(sqrt_images))
+    best_rows = (num_images + best_cols - 1) // best_cols
+    best_diff = float('inf')
+    target_ratio = 2/3  # cols/rows ratio we want
+
+    for cols in range(max(1, int(sqrt_images * 0.5)), min(num_images, int(sqrt_images * 2)) + 1):
+        rows = (num_images + cols - 1) // cols  # Ceiling division
+        current_ratio = cols / rows
+        diff = abs(current_ratio - target_ratio)
+        if diff < best_diff:
+            best_diff = diff
+            best_cols = cols
+            best_rows = rows
+
+    cols = best_cols
+    rows = best_rows
+    print(f"Using {cols}x{rows} grid for {num_images} images")
+
+    # Generate grid positions first
+    grid_positions = []
+    for i in range(len(df)):
+        grid_row = i // cols
+        grid_col = i % cols
+        grid_positions.append(f"{grid_row:02d}_{grid_col:02d}")
+
+    df['grid_position'] = grid_positions
 
     file_paths = []
-    for idx, row in df.iterrows():
+    for position_idx, (idx, row) in enumerate(df.iterrows()):
         gen_id = row['id']
         s3Key = row['s3Key']
         tags = row['tags']
-        print(f"{gen_id}: {s3Key}, tags: {tags}")
+        grid_pos = row['grid_position']
 
-        file_path = f"{REF_MOODBOARD_DIR}/{gen_id}.png"
+        print(f"{gen_id}: {s3Key}, tags: {tags}, position: {grid_pos}")
+
+        file_path = f"{REF_MOODBOARD_DIR}/{grid_pos}.png"
         image = get_image_from_s3(s3Key)
         image.save(file_path)
         file_paths.append(file_path)
