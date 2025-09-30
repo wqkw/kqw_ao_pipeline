@@ -91,6 +91,7 @@ def extract_context_dto(artifact: StoryboardSpec, step, **kwargs) -> BaseModel:
     elif step == GenerationStep.COMPONENT_DESCRIPTIONS:
         fields = {
             "prompt_input": (str, Field(..., description="User's creative input for this generation step")),
+            "logline": (str, Field(..., description=get_field_desc(StoryboardSpec, "logline"))),
             "moodboard_path": (str, Field(..., description=get_field_desc(StoryboardSpec, "moodboard_path"))),
             "lore": (str, Field(..., description=get_field_desc(StoryboardSpec, "lore"))),
             "narrative": (str, Field(..., description=get_field_desc(StoryboardSpec, "narrative"))),
@@ -99,6 +100,7 @@ def extract_context_dto(artifact: StoryboardSpec, step, **kwargs) -> BaseModel:
         }
         ContextModel = create_model("ComponentDescriptionsContext", **fields, __base__=StrictModel)
         data = kwargs.copy()
+        data["logline"] = artifact.logline
         data["moodboard_path"] = artifact.moodboard_path
         data["lore"] = artifact.lore
         data["narrative"] = artifact.narrative
@@ -108,13 +110,23 @@ def extract_context_dto(artifact: StoryboardSpec, step, **kwargs) -> BaseModel:
     elif step == GenerationStep.COMPONENT_IMAGES:
         fields = {
             "prompt_input": (str, Field(..., description="User's creative input for this generation step")),
+            "logline": (str, Field(..., description=get_field_desc(StoryboardSpec, "logline"))),
             "moodboard_path": (str, Field(..., description=get_field_desc(StoryboardSpec, "moodboard_path"))),
-            "prop_name": (str, Field(..., description=get_field_desc(PropSpec, "name"))),
-            "prop_description": (str, Field(..., description=get_field_desc(PropSpec, "description")))
+            "lore": (str, Field(..., description=get_field_desc(StoryboardSpec, "lore"))),
+            "narrative": (str, Field(..., description=get_field_desc(StoryboardSpec, "narrative"))),
+            "characters": (List[CharacterSpec], Field(..., description="List of characters to generate images for")),
+            "locations": (List[LocationSpec], Field(..., description="List of locations to generate images for")),
+            "props": (List[PropSpec], Field(..., description="List of props to generate images for"))
         }
         ContextModel = create_model("ComponentImagesContext", **fields, __base__=StrictModel)
         data = kwargs.copy()
+        data["logline"] = artifact.logline
         data["moodboard_path"] = artifact.moodboard_path
+        data["lore"] = artifact.lore
+        data["narrative"] = artifact.narrative
+        data["characters"] = artifact.characters or []
+        data["locations"] = artifact.locations or []
+        data["props"] = artifact.props or []
         return ContextModel(**data)
     elif step == GenerationStep.STAGE_SHOT_DESCRIPTIONS:
         fields = {

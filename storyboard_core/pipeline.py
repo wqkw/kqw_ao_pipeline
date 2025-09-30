@@ -13,6 +13,8 @@ from typing import List, Dict, Tuple
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
 
+from openrouter_wrapper import llm_async
+
 from .artifact import StoryboardSpec, SceneSpec, ShotSpec, StrictModel
 from .artifact_adapters import (
     extract_context_dto,
@@ -106,8 +108,6 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     Returns:
         Tuple of (updated_artifact, llm_output)
     """
-    from openrouter_wrapper import batch_llm
-
     # Extract context DTO with populated data
     context = extract_context_dto(artifact, step, prompt_input=prompt_input, **kwargs)
 
@@ -122,23 +122,21 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
         moodboard_path = context.moodboard_path
         guide = _read_guide("prompts/logline_guide.md")
 
-        responses, _, _ = await batch_llm(
+        responses, _, _ = await llm_async(
             model=model,
-            texts=[prompt_input],
+            texts=prompt_input,
             context=guide,
-            image_paths=[moodboard_path],
+            image_paths=moodboard_path,
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
 
     # Special handling for LORE step: include moodboard image and lore guide
     elif step == GenerationStep.LORE:
-        from openrouter_wrapper import llm
-
         moodboard_path = context.moodboard_path
         context_str = f"logline: {context.logline}\n\n{_read_guide("prompts/lore_guide.md")}"
 
-        response, _ = await llm(
+        response, _ = await llm_async(
             model=model,
             text=prompt_input,
             context=context_str,
@@ -152,9 +150,9 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     elif step == GenerationStep.NARRATIVE:
         context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\n{_read_guide('prompts/narrative_guide.md')}"
 
-        responses, _, _ = await batch_llm(
+        responses, _, _ = await llm_async(
             model=model,
-            texts=[prompt_input],
+            texts=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
@@ -164,9 +162,24 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     elif step == GenerationStep.SCENES:
         context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/scenes_guide.md')}"
 
-        responses, _, _ = await batch_llm(
+        responses, _, _ = await llm_async(
             model=model,
-            texts=[prompt_input],
+            texts=prompt_input,
+            context=context_str,
+            response_format=OutputModel,
+            reasoning_effort=reasoning
+        )
+
+    # Special handling for COMPONENT_DESCRIPTIONS step: use components guide
+    elif step == GenerationStep.COMPONENT_DESCRIPTIONS:
+        scene_names_str = "\n  - ".join(context.scene_names)
+        scene_descriptions_str = "\n".join([f"  - {name}: {desc}" for name, desc in zip(context.scene_names, context.scene_descriptions)])
+
+        context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\nscene_names:\n  - {scene_names_str}\n\nscene_descriptions:\n{scene_descriptions_str}\n\n{_read_guide('prompts/components_guide.md')}"
+
+        responses, _, _ = await llm_async(
+            model=model,
+            texts=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
@@ -175,9 +188,9 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     else:
         # Standard generation for other steps
         context_str = context_dto_to_string(context)
-        responses, _, _ = await batch_llm(
+        responses, _, _ = await llm_async(
             model=model,
-            texts=[prompt_input],
+            texts=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
@@ -507,24 +520,28 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
     """
     from openrouter_wrapper import batch_llm
 
+    # Extract context using DTO
+    context = extract_context_dto(artifact, GenerationStep.COMPONENT_IMAGES, prompt_input=prompt_input)
+    moodboard_path = context.moodboard_path
+
     # Collect all components to generate
     components = []
 
     # Add characters (only if they have descriptions)
-    if artifact.characters:
-        for char in artifact.characters:
+    if context.characters:
+        for char in context.characters:
             if char.description and char.description.strip():
                 components.append(("character", char.name, char.description))
 
     # Add locations (only if they have descriptions)
-    if artifact.locations:
-        for loc in artifact.locations:
+    if context.locations:
+        for loc in context.locations:
             if loc.description and loc.description.strip():
                 components.append(("location", loc.name, loc.description))
 
     # Add props (only if they have descriptions)
-    if artifact.props:
-        for prop in artifact.props:
+    if context.props:
+        for prop in context.props:
             if prop.description and prop.description.strip():
                 components.append(("prop", prop.name, prop.description))
 
@@ -537,13 +554,13 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
         # Make the prompt more explicit and visual-focused for image generation
         if comp_type == "character":
             # Extract visual elements from character descriptions
-            prompt = f"Draw a fantasy character: {name}. Visual appearance: {description}. Style: concept art, character design, clear details, storyboard illustration."
+            prompt = f"Draw a character: {name}. Visual appearance: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
         elif comp_type == "location":
             # Focus on environmental visuals
-            prompt = f"Draw a fantasy location: {name}. Environment: {description}. Style: concept art, environmental design, clear details, storyboard illustration."
+            prompt = f"Draw a location: {name}. Environment: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
         else:  # prop
             # Focus on object visuals
-            prompt = f"Draw a fantasy object: {name}. Item appearance: {description}. Style: concept art, prop design, clear details, storyboard illustration."
+            prompt = f"Draw an object: {name}. Item appearance: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
         texts.append(prompt)
 
     print(f"🎨 Generating {len(components)} component images:")
@@ -551,7 +568,8 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
         print(f"  {i+1}. {comp_type}: {name}")
         print(f"     Description: {description[:100]}...")
 
-    context_str = "Generate visual concept art images. Create detailed illustrations based on the fantasy descriptions. Output: image only, no text or descriptions."
+    # Build context string with guide
+    context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/components_guide.md')}\n\nGenerate visual concept art images. Create detailed illustrations based on the descriptions. Match the style of the reference moodboard image. Output: image only, no text or descriptions."
 
     # Select model for image generation
     model, _ = _select_model_for_step(GenerationStep.COMPONENT_IMAGES)
@@ -579,6 +597,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
                 model=model,
                 texts=batch_texts,
                 context=context_str,
+                image_paths=[moodboard_path] * len(batch_texts),
                 output_is_image=True,
                 image_generation_retries=2
             )
@@ -597,6 +616,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
                     model=model,
                     texts=batch_texts,
                     context=context_str,
+                    image_paths=[moodboard_path] * len(batch_texts),
                     output_is_image=False  # Get text response to see what model returned
                 )
 
