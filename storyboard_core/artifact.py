@@ -18,18 +18,21 @@ class LocationSpec(StrictModel):
     name: str = Field(..., description="Unique name for this location (e.g., 'Crimson Foundry', 'Central Plaza').")
     description: Optional[str] = Field(None, description="Visual description including appearance, atmosphere, layout, notable features, and any hazards or important details that affect the story.")
     image_path: Optional[str] = Field(None, description="Path to the generated image of this location.")
+    image_reference_from_moodboard: Optional[str] = Field(None, description="Path to the moodboard reference image used as reference for this location.")
 
 class CharacterSpec(StrictModel):
     """A character or group in the story."""
     name: str = Field(..., description="Character name or group designation (e.g., 'Captain Thorne', 'Palace Guards').")
     description: Optional[str] = Field(None, description="Physical appearance, personality, motivations, clothing, mannerisms, role in story, and key relationships or abilities.")
     image_path: Optional[str] = Field(None, description="Path to the generated image of this character.")
+    image_reference_from_moodboard: Optional[str] = Field(None, description="Path to the moodboard reference image used as reference for this character.")
 
 class PropSpec(StrictModel):
     """Any object, vehicle, or creature in the story."""
     name: str = Field(..., description="Descriptive name for this prop (e.g., 'Resonance Scanner', 'Broken Crown').")
     description: Optional[str] = Field(None, description="Appearance, materials, condition, function, how characters interact with it, and any special properties or significance.")
     image_path: Optional[str] = Field(None, description="Path to the generated image of this prop.")
+    image_reference_from_moodboard: Optional[str] = Field(None, description="Path to the moodboard reference image used as reference for this prop.")
 
 
 SoundType = Literal[

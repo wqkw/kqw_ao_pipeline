@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import os
 from typing import List, Dict, Tuple
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict  
 from enum import Enum
 
-from openrouter_wrapper import llm_async
+from openrouter_wrapper import llm
 
 from .artifact import StoryboardSpec, SceneSpec, ShotSpec, StrictModel
 from .artifact_adapters import (
@@ -66,7 +66,7 @@ def _select_model_for_step(step: GenerationStep) -> Tuple[str, str]:
 
     # Lore generation uses GPT-5 with medium reasoning
     if step in [GenerationStep.LORE, GenerationStep.NARRATIVE]:
-        return "openai/gpt-5", "medium"
+        return "openai/gpt-5", "minimal"
 
     # Other text generation steps use fast model
     # To use GPT-5 for narrative/scenes as well, uncomment this:
@@ -122,11 +122,11 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
         moodboard_path = context.moodboard_path
         guide = _read_guide("prompts/logline_guide.md")
 
-        responses, _, _ = await llm_async(
+        response, _, _ = llm(
             model=model,
-            texts=prompt_input,
+            text=prompt_input,
             context=guide,
-            image_paths=moodboard_path,
+            input_image_path=moodboard_path,
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
@@ -136,7 +136,7 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
         moodboard_path = context.moodboard_path
         context_str = f"logline: {context.logline}\n\n{_read_guide("prompts/lore_guide.md")}"
 
-        response, _ = await llm_async(
+        response, _, _ = llm(
             model=model,
             text=prompt_input,
             context=context_str,
@@ -144,15 +144,14 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
-        responses = [response]
 
     # Special handling for NARRATIVE step: use narrative guide
     elif step == GenerationStep.NARRATIVE:
         context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\n{_read_guide('prompts/narrative_guide.md')}"
 
-        responses, _, _ = await llm_async(
+        response, _, _ = llm(
             model=model,
-            texts=prompt_input,
+            text=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
@@ -162,25 +161,41 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     elif step == GenerationStep.SCENES:
         context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/scenes_guide.md')}"
 
-        responses, _, _ = await llm_async(
+        response, _, _ = llm(
             model=model,
-            texts=prompt_input,
+            text=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
 
-    # Special handling for COMPONENT_DESCRIPTIONS step: use components guide
+    # Special handling for COMPONENT_DESCRIPTIONS step: use components guide with all moodboard images
     elif step == GenerationStep.COMPONENT_DESCRIPTIONS:
+        from pathlib import Path
+
         scene_names_str = "\n  - ".join(context.scene_names)
         scene_descriptions_str = "\n".join([f"  - {name}: {desc}" for name, desc in zip(context.scene_names, context.scene_descriptions)])
 
-        context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\nscene_names:\n  - {scene_names_str}\n\nscene_descriptions:\n{scene_descriptions_str}\n\n{_read_guide('prompts/components_guide.md')}"
+        # Collect all moodboard images (excluding moodboard_tile.png)
+        moodboard_dir = Path("data/ref_moodboard")
+        moodboard_images = sorted([
+            str(img) for img in moodboard_dir.glob("*.png")
+            if img.name != "moodboard_tile.png"
+        ])
 
-        responses, _, _ = await llm_async(
+        # Build prompt with filename identifiers (like test_gemini_filename_recognition.py)
+        image_metadata_str = "Reference images with filenames:\n"
+        for img_path in moodboard_images:
+            filename = Path(img_path).name
+            image_metadata_str += f"- {filename}\n"
+
+        context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\nscene_names:\n  - {scene_names_str}\n\nscene_descriptions:\n{scene_descriptions_str}\n\n{image_metadata_str}\n\nIMPORTANT: When selecting reference images, you must use the EXACT filename from the list above. Copy the filename character-by-character precisely. Each filename is unique. Do not modify or invent new filenames.\n\n{_read_guide('prompts/components_guide.md')}"
+
+        response, _, _ = llm(
             model=model,
-            texts=prompt_input,
+            text=prompt_input,
             context=context_str,
+            input_image_path=moodboard_images,
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
@@ -188,15 +203,15 @@ async def generate_step(artifact: StoryboardSpec, step: GenerationStep, prompt_i
     else:
         # Standard generation for other steps
         context_str = context_dto_to_string(context)
-        responses, _, _ = await llm_async(
+        response, _, _ = llm(
             model=model,
-            texts=prompt_input,
+            text=prompt_input,
             context=context_str,
             response_format=OutputModel,
             reasoning_effort=reasoning
         )
 
-    return artifact, responses[0]
+    return artifact, response
 
 
 async def generate_batch_stage_shots(artifact: StoryboardSpec, prompt_input: str) -> StoryboardSpec:
@@ -214,94 +229,66 @@ async def generate_batch_stage_shots(artifact: StoryboardSpec, prompt_input: str
 
     from openrouter_wrapper import batch_llm
 
-    # Generate descriptions using structured output
+    # Get model and reasoning effort
+    model, reasoning = _select_model_for_step(GenerationStep.STAGE_SHOT_DESCRIPTIONS)
     OutputModel = create_output_dto(GenerationStep.STAGE_SHOT_DESCRIPTIONS)
 
-    # Batch all scene stage shots together
     print(f"🎬 Generating stage setting shots for {len(artifact.scenes)} scenes")
-
-    # Prepare batch data
-    texts = []
-    scene_contexts = []
-
-    for scene in artifact.scenes:
-        context = extract_context_dto(artifact, GenerationStep.STAGE_SHOT_DESCRIPTIONS,
-                                      prompt_input=prompt_input,
-                                      scene_name=scene.name,
-                                      scene_description=scene.description)
-
-        texts.append(f"Generate a single stage setting shot description for scene: {scene.name}")
-        scene_contexts.append(context_dto_to_string(context))
-
     print(f"  📍 Scenes: {[scene.name for scene in artifact.scenes]}")
 
-    try:
-        # Use single context string since all scenes share similar context structure
-        batch_context = f"Generate one stage setting shot description for each scene. Context format: scene data including narrative, props, etc."
+    # Prepare batch data with image references
+    texts = []
+    image_paths_list = []
 
-        responses, _, _ = await batch_llm(
-            model="google/gemini-2.5-flash",
-            texts=texts,
-            context=batch_context,
-            response_format=OutputModel,
-            reasoning_effort="minimal"
-        )
+    for scene in artifact.scenes:
+        # Collect character and prop images for this scene
+        scene_images = []
 
-        # Process responses and update scenes
-        successful_scenes = 0
+        # Add character images
+        if scene.character_names and artifact.characters:
+            for char_name in scene.character_names:
+                for char in artifact.characters:
+                    if char.name == char_name and char.image_path:
+                        scene_images.append(char.image_path)
+                        break
 
-        for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
-            try:
-                if hasattr(response, 'shot_descriptions') and response.shot_descriptions:
-                    shot_descriptions = response.shot_descriptions
-                    if shot_descriptions and len(shot_descriptions) > 0:
-                        scene.stage_setting_shot = ShotSpec(
-                            name=f"{scene.name} Stage Setting",
-                            description=shot_descriptions[0]
-                        )
-                        print(f"    ✅ Scene {i+1}: {shot_descriptions[0][:50]}...")
-                        successful_scenes += 1
-                    else:
-                        print(f"    ❌ Scene {i+1}: No descriptions in response")
-                else:
-                    print(f"    ❌ Scene {i+1}: Invalid response format")
-            except Exception as e:
-                print(f"    ❌ Scene {i+1}: Processing failed - {str(e)[:50]}")
+        # Add prop images
+        if scene.prop_names and artifact.props:
+            for prop_name in scene.prop_names:
+                for prop in artifact.props:
+                    if prop.name == prop_name and prop.image_path:
+                        scene_images.append(prop.image_path)
+                        break
 
-        print(f"  📊 Stage shots created: {successful_scenes}/{len(artifact.scenes)}")
+        texts.append(f"Generate a single stage setting shot description for scene: {scene.name}\n\nScene: {scene.description}")
+        image_paths_list.append(scene_images if scene_images else None)
 
-    except Exception as e:
-        print(f"  ❌ Batch generation failed: {str(e)[:100]}")
-        print("  Falling back to individual processing...")
+    # Generate stage shots
+    batch_context = "Generate one stage setting shot description for each scene. Use the provided character and prop images as visual reference. Focus on establishing the environment and atmosphere."
 
-        # Fallback: process individually if batch fails
-        for i, scene in enumerate(artifact.scenes):
-            try:
-                context = extract_context_dto(artifact, GenerationStep.STAGE_SHOT_DESCRIPTIONS,
-                                              prompt_input=prompt_input,
-                                              scene_name=scene.name,
-                                              scene_description=scene.description)
+    responses, _, _ = await batch_llm(
+        model=model,
+        texts=texts,
+        context=batch_context,
+        image_paths=image_paths_list,
+        response_format=OutputModel,
+        reasoning_effort=reasoning
+    )
 
-                response, _, _ = await batch_llm(
-                    model="google/gemini-2.5-flash",
-                    texts=[f"Generate stage setting shot description for scene: {scene.name}"],
-                    context=context_dto_to_string(context),
-                    response_format=OutputModel,
-                    reasoning_effort="minimal"
-                )
+    # Process responses and update scenes
+    successful_scenes = 0
+    for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
+        if response and hasattr(response, 'shot_descriptions') and response.shot_descriptions:
+            scene.stage_setting_shot = ShotSpec(
+                name=f"{scene.name} Stage Setting",
+                description=response.shot_descriptions[0]
+            )
+            print(f"    ✅ Scene {i+1}: {response.shot_descriptions[0][:50]}...")
+            successful_scenes += 1
+        else:
+            print(f"    ❌ Scene {i+1}: No description generated")
 
-                if response and len(response) > 0 and hasattr(response[0], 'shot_descriptions'):
-                    shot_descriptions = response[0].shot_descriptions
-                    if shot_descriptions and len(shot_descriptions) > 0:
-                        scene.stage_setting_shot = ShotSpec(
-                            name=f"{scene.name} Stage Setting",
-                            description=shot_descriptions[0]
-                        )
-                        print(f"    ✅ Fallback - Scene {i+1}: Created stage shot")
-
-            except Exception as fallback_e:
-                print(f"    ❌ Fallback - Scene {i+1}: {str(fallback_e)[:50]}")
-                continue
+    print(f"  📊 Stage shots created: {successful_scenes}/{len(artifact.scenes)}")
 
     return artifact
 
@@ -320,101 +307,45 @@ async def generate_batch_shot_descriptions(artifact: StoryboardSpec, prompt_inpu
 
     from openrouter_wrapper import batch_llm
 
-    # Create context for each scene
-    texts = []
-    scene_contexts = []
-
-    print(f"🎬 Generating shot descriptions for {len(artifact.scenes)} scenes")
-
-    for scene in artifact.scenes:
-        # Extract context DTO with all component descriptions
-        context = extract_context_dto(artifact, GenerationStep.SHOT_DESCRIPTIONS,
-                                      prompt_input=prompt_input,
-                                      scene_name=scene.name,
-                                      scene_description=scene.description or "")
-
-        texts.append(f"Generate individual shot descriptions for scene: {scene.name}")
-        scene_contexts.append(context_dto_to_string(context))
-
-    print(f"  📍 Scenes: {[scene.name for scene in artifact.scenes]}")
-
-    # Get output model
+    # Get model and reasoning effort
+    model, reasoning = _select_model_for_step(GenerationStep.SHOT_DESCRIPTIONS)
     OutputModel = create_output_dto(GenerationStep.SHOT_DESCRIPTIONS)
 
-    try:
-        # Use batch LLM call with structured output
-        batch_context = "Generate exactly 3 shot descriptions for each scene. Each shot should break down a key moment in the scene with specific camera angles and framing. Context includes narrative, characters, locations, and props."
+    print(f"🎬 Generating shot descriptions for {len(artifact.scenes)} scenes")
+    print(f"  📍 Scenes: {[scene.name for scene in artifact.scenes]}")
 
-        responses, _, _ = await batch_llm(
-            model="openai/gpt-5",
-            texts=texts,
-            context=batch_context,
-            response_format=OutputModel,
-            reasoning_effort="medium"
-        )
+    # Prepare batch data
+    texts = []
+    for scene in artifact.scenes:
+        texts.append(f"Generate exactly 3 individual shot descriptions for scene: {scene.name}\n\nScene: {scene.description}")
 
-        # Process responses and update scenes
-        successful_scenes = 0
+    # Generate shot descriptions
+    batch_context = "Generate exactly 3 shot descriptions for each scene. Each shot should break down a key moment in the scene with specific camera angles and framing."
 
-        for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
-            try:
-                if hasattr(response, 'shot_descriptions') and response.shot_descriptions:
-                    shot_descriptions = response.shot_descriptions
-                    if shot_descriptions and len(shot_descriptions) > 0:
-                        # Create ShotSpec objects for each description
-                        scene.shots = []
-                        for j, shot_desc in enumerate(shot_descriptions):
-                            shot = ShotSpec(
-                                name=f"{scene.name} Shot {j+1}",
-                                description=shot_desc
-                            )
-                            scene.shots.append(shot)
-                        print(f"    ✅ Scene {i+1}: {len(shot_descriptions)} shots created")
-                        successful_scenes += 1
-                    else:
-                        print(f"    ❌ Scene {i+1}: No descriptions in response")
-                else:
-                    print(f"    ❌ Scene {i+1}: Invalid response format")
-            except Exception as e:
-                print(f"    ❌ Scene {i+1}: Processing failed - {str(e)[:50]}")
+    responses, _, _ = await batch_llm(
+        model=model,
+        texts=texts,
+        context=batch_context,
+        response_format=OutputModel,
+        reasoning_effort=reasoning
+    )
 
-        print(f"  📊 Shot descriptions created: {successful_scenes}/{len(artifact.scenes)}")
+    # Process responses and update scenes
+    successful_scenes = 0
+    for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
+        if response and hasattr(response, 'shot_descriptions') and response.shot_descriptions:
+            scene.shots = []
+            for j, shot_desc in enumerate(response.shot_descriptions):
+                scene.shots.append(ShotSpec(
+                    name=f"{scene.name} Shot {j+1}",
+                    description=shot_desc
+                ))
+            print(f"    ✅ Scene {i+1}: {len(response.shot_descriptions)} shots created")
+            successful_scenes += 1
+        else:
+            print(f"    ❌ Scene {i+1}: No descriptions generated")
 
-    except Exception as e:
-        print(f"  ❌ Batch generation failed: {str(e)[:100]}")
-        print("  Falling back to individual processing...")
-
-        # Fallback: process individually if batch fails
-        for i, scene in enumerate(artifact.scenes):
-            try:
-                context = extract_context_dto(artifact, GenerationStep.SHOT_DESCRIPTIONS,
-                                              prompt_input=prompt_input,
-                                              scene_name=scene.name,
-                                              scene_description=scene.description or "")
-
-                response, _, _ = await batch_llm(
-                    model="openai/gpt-5",
-                    texts=[f"Generate shot descriptions for scene: {scene.name}"],
-                    context=context_dto_to_string(context),
-                    response_format=OutputModel,
-                    reasoning_effort="medium"
-                )
-
-                if response and len(response) > 0 and hasattr(response[0], 'shot_descriptions'):
-                    shot_descriptions = response[0].shot_descriptions
-                    if shot_descriptions and len(shot_descriptions) > 0:
-                        scene.shots = []
-                        for j, shot_desc in enumerate(shot_descriptions):
-                            shot = ShotSpec(
-                                name=f"{scene.name} Shot {j+1}",
-                                description=shot_desc
-                            )
-                            scene.shots.append(shot)
-                        print(f"    ✅ Fallback - Scene {i+1}: {len(shot_descriptions)} shots created")
-
-            except Exception as fallback_e:
-                print(f"    ❌ Fallback - Scene {i+1}: {str(fallback_e)[:50]}")
-                continue
+    print(f"  📊 Shot descriptions created: {successful_scenes}/{len(artifact.scenes)}")
 
     return artifact
 
@@ -434,55 +365,53 @@ async def generate_stage_shot_images(artifact: StoryboardSpec, prompt_input: str
 
     from openrouter_wrapper import batch_llm
 
-    # Create context for each scene that has a stage_setting_shot description
+    # Get model
+    model, _ = _select_model_for_step(GenerationStep.STAGE_SHOT_IMAGES)
+
+    # Prepare batch data with image references
     texts = []
-    contexts = []
+    image_paths_list = []
     scene_indices = []
 
     for i, scene in enumerate(artifact.scenes):
         if scene.stage_setting_shot and scene.stage_setting_shot.description:
-            # Get component image URLs for this scene
-            component_image_paths = []
+            # Collect character and prop images for this scene
+            component_images = []
+
+            # Add character images
+            if scene.character_names and artifact.characters:
+                for char_name in scene.character_names:
+                    for char in artifact.characters:
+                        if char.name == char_name and char.image_path:
+                            component_images.append(char.image_path)
+                            break
+
+            # Add prop images
             if scene.prop_names and artifact.props:
                 for prop_name in scene.prop_names:
                     for prop in artifact.props:
                         if prop.name == prop_name and prop.image_path:
-                            component_image_paths.append(prop.image_path)
+                            component_images.append(prop.image_path)
+                            break
 
-            # Extract context DTO
-            context = extract_context_dto(artifact, GenerationStep.STAGE_SHOT_IMAGES,
-                                          prompt_input=prompt_input,
-                                          stage_shot_description=scene.stage_setting_shot.description,
-                                          scene_description=scene.description or "",
-                                          component_image_paths=component_image_paths)
-
-            texts.append(f"Generate stage setting image for scene: {scene.name}")
-            contexts.append(context_dto_to_string(context))
+            texts.append(f"{scene.stage_setting_shot.description}")
+            image_paths_list.append(component_images if component_images else None)
             scene_indices.append(i)
 
     if not texts:
         return artifact
 
-    # Generate images using model selector
-    model, _ = _select_model_for_step(GenerationStep.STAGE_SHOT_IMAGES)
     print(f"🎨 Generating {len(texts)} stage setting images in batch...")
     print(f"  📍 Scenes: {[artifact.scenes[i].name for i in scene_indices]}")
 
-    try:
-        responses, _, _ = await batch_llm(
-            model=model,
-            texts=texts,
-            context="Generate stage setting images for fantasy scenes. Create detailed environmental illustrations.",
-            output_is_image=True,
-            image_generation_retries=2
-        )
-        print(f"  ✅ Batch generation completed successfully")
-
-    except Exception as e:
-        print(f"  ❌ Batch generation failed: {str(e)[:100]}")
-        print(f"  📝 Debug info should be saved to image_generation_debug.txt")
-        # Return empty responses to maintain alignment
-        responses = [None] * len(texts)
+    responses, _, _ = await batch_llm(
+        model=model,
+        texts=texts,
+        context="Generate stage setting images. Use the provided character and prop images as visual reference for style and composition. Create detailed environmental illustrations that establish the scene's atmosphere.",
+        image_paths=image_paths_list,
+        output_is_image=True,
+        image_generation_retries=2
+    )
 
     # Save images and update scenes
     successful_images = 0
@@ -524,49 +453,55 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
     context = extract_context_dto(artifact, GenerationStep.COMPONENT_IMAGES, prompt_input=prompt_input)
     moodboard_path = context.moodboard_path
 
-    # Collect all components to generate
+    # Collect all components to generate with their moodboard references
     components = []
 
     # Add characters (only if they have descriptions)
     if context.characters:
         for char in context.characters:
             if char.description and char.description.strip():
-                components.append(("character", char.name, char.description))
+                moodboard_ref = getattr(char, 'image_reference_from_moodboard', None) or moodboard_path
+                components.append(("character", char.name, char.description, moodboard_ref))
 
     # Add locations (only if they have descriptions)
     if context.locations:
         for loc in context.locations:
             if loc.description and loc.description.strip():
-                components.append(("location", loc.name, loc.description))
+                moodboard_ref = getattr(loc, 'image_reference_from_moodboard', None) or moodboard_path
+                components.append(("location", loc.name, loc.description, moodboard_ref))
 
     # Add props (only if they have descriptions)
     if context.props:
         for prop in context.props:
             if prop.description and prop.description.strip():
-                components.append(("prop", prop.name, prop.description))
+                moodboard_ref = getattr(prop, 'image_reference_from_moodboard', None) or moodboard_path
+                components.append(("prop", prop.name, prop.description, moodboard_ref))
 
     if not components:
         return artifact
 
-    # Create texts for batch generation
+    # Create texts and image paths for batch generation
     texts = []
-    for comp_type, name, description in components:
+    image_paths = []
+    for comp_type, name, description, moodboard_ref in components:
         # Make the prompt more explicit and visual-focused for image generation
         if comp_type == "character":
             # Extract visual elements from character descriptions
-            prompt = f"Draw a character: {name}. Visual appearance: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
+            prompt = f"Generate image for a character: {name}. Visual appearance: {description}. Style: copy the aesthetics of the attached reference image."
         elif comp_type == "location":
             # Focus on environmental visuals
-            prompt = f"Draw a location: {name}. Environment: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
+            prompt = f"Generate image for a location: {name}. Environment: {description}. Style: copy the aesthetics of the attached reference image."
         else:  # prop
             # Focus on object visuals
-            prompt = f"Draw an object: {name}. Item appearance: {description}. Style: copy the aesthetics of the attached moodboard. Not the subject content necessarily, just the style."
+            prompt = f"Generate image for an object: {name}. Item appearance: {description}. Style: copy the aesthetics of the attached reference image."
         texts.append(prompt)
+        image_paths.append(moodboard_ref)
 
     print(f"🎨 Generating {len(components)} component images:")
-    for i, (comp_type, name, description) in enumerate(components):
+    for i, (comp_type, name, description, moodboard_ref) in enumerate(components):
         print(f"  {i+1}. {comp_type}: {name}")
         print(f"     Description: {description[:100]}...")
+        print(f"     Reference: {moodboard_ref}")
 
     # Build context string with guide
     context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/components_guide.md')}\n\nGenerate visual concept art images. Create detailed illustrations based on the descriptions. Match the style of the reference moodboard image. Output: image only, no text or descriptions."
@@ -588,6 +523,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
 
         batch_components = components[start_idx:end_idx]
         batch_texts = texts[start_idx:end_idx]
+        batch_image_paths = image_paths[start_idx:end_idx]
 
         print(f"🎨 Processing batch {batch_num + 1}/3 ({len(batch_components)} components)")
         print(f"  Components: {[f'{c[0]}-{c[1]}' for c in batch_components]}")
@@ -597,7 +533,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
                 model=model,
                 texts=batch_texts,
                 context=context_str,
-                image_paths=[moodboard_path] * len(batch_texts),
+                image_paths=batch_image_paths,
                 output_is_image=True,
                 image_generation_retries=2
             )
@@ -616,7 +552,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
                     model=model,
                     texts=batch_texts,
                     context=context_str,
-                    image_paths=[moodboard_path] * len(batch_texts),
+                    image_paths=batch_image_paths,
                     output_is_image=False  # Get text response to see what model returned
                 )
 
@@ -654,7 +590,7 @@ async def generate_batch_components(artifact: StoryboardSpec, prompt_input: str)
     successful_generations = 0
     failed_generations = 0
 
-    for (comp_type, name, description), image_bytes in zip(components, all_responses):
+    for (comp_type, name, description, moodboard_ref), image_bytes in zip(components, all_responses):
         if image_bytes is not None:
             try:
                 image_path = save_image_to_data(image_bytes, artifact.name, comp_type, name)

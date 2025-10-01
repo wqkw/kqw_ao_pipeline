@@ -63,18 +63,18 @@ storyboard_core/
 
 ### ✅ All Steps Operational
 
-| Step | Description | Model | Options | Output |
-|------|-------------|-------|---------|--------|
-| 1. LOGLINE | High-level concept generation | GPT-5 | 5 | Logline text |
-| 2. LORE | World-building | GPT-5 (medium reasoning) | 3 | Lore text |
-| 3. NARRATIVE | Plot structure | GPT-5 (medium reasoning) | 3 | Narrative text |
-| 4. SCENES | Scene breakdown | Gemini 2.5 Flash | 1 | Scene names + descriptions |
-| 5. COMPONENT_DESCRIPTIONS | Characters/locations/props | Gemini 2.5 Flash | 1 | Component descriptions |
-| 6. COMPONENT_IMAGES | Concept art generation | Gemini 2.5 Flash Image | - | PNG images (3 batches, 2 retries) |
-| 7. STAGE_SHOT_DESCRIPTIONS | Establishing shots | Gemini 2.5 Flash | 1 | Stage shot descriptions |
-| 8. STAGE_SHOT_IMAGES | Stage setting images | Gemini 2.5 Flash Image | - | PNG images (2 retries) |
-| 9. SHOT_DESCRIPTIONS | Individual shot breakdown | GPT-5 (medium reasoning) | 1 | 3 shots per scene |
-| 10. SHOT_IMAGES | Individual shot images | Gemini 2.5 Flash Image | - | PNG images (10/batch, 2 retries) |
+| Step | Description | Model | Options | Context | Guide File | Output |
+|------|-------------|-------|---------|---------|------------|--------|
+| 1. LOGLINE | High-level concept generation | GPT-5 | 5 | moodboard | logline_guide.md | Logline text |
+| 2. LORE | World-building | GPT-5 (minimal reasoning) | 3 | logline, moodboard | lore_guide.md | Lore text |
+| 3. NARRATIVE | Plot structure | GPT-5 (minimal reasoning) | 3 | logline, lore | narrative_guide.md | Narrative text |
+| 4. SCENES | Scene breakdown | Gemini 2.5 Flash | 1 | logline, lore, narrative | scenes_guide.md | Scene names + descriptions |
+| 5. COMPONENT_DESCRIPTIONS | Characters/locations/props | Gemini 2.5 Flash | 1 | logline, lore, narrative, scenes | components_guide.md | Component descriptions |
+| 6. COMPONENT_IMAGES | Concept art generation | Gemini 2.5 Flash Image | - | logline, lore, narrative, moodboard | components_guide.md | PNG images (3 batches, 2 retries) |
+| 7. STAGE_SHOT_DESCRIPTIONS | Establishing shots | Gemini 2.5 Flash | 1 | narrative, scene data, props | - | Stage shot descriptions |
+| 8. STAGE_SHOT_IMAGES | Stage setting images | Gemini 2.5 Flash Image | - | scene description, component images | - | PNG images (2 retries) |
+| 9. SHOT_DESCRIPTIONS | Individual shot breakdown | GPT-5 (minimal reasoning) | 1 | narrative, scene data, components | - | 3 shots per scene |
+| 10. SHOT_IMAGES | Individual shot images | Gemini 2.5 Flash Image | - | shot description, stage setting image | - | PNG images (10/batch, 2 retries) |
 
 **Dependencies:**
 ```
@@ -108,7 +108,9 @@ kqw_ao_pipeline/
 ├── prompts/                      # Generation guides
 │   ├── logline_guide.md          # Logline generation instructions
 │   ├── lore_guide.md             # Lore generation instructions
-│   └── narrative_guide.md        # Narrative generation instructions
+│   ├── narrative_guide.md        # Narrative generation instructions
+│   ├── scenes_guide.md           # Scene breakdown instructions
+│   └── components_guide.md       # Component description/image generation instructions
 ├── data/                         # Generated outputs
 │   └── {project_name}/
 │       ├── images/               # All generated images
@@ -148,15 +150,28 @@ All 10 generation steps are fully operational with robust error handling and ret
 
 ## Developer Guide: Modifying the Pipeline
 
+### Context Flow Architecture
+
+All generation steps now follow a consistent pattern:
+1. Extract context from artifact via `extract_context_dto()`
+2. Format context string (with guide files for early steps)
+3. Pass to LLM with moodboard image as style reference (where applicable)
+
+**Key Principles:**
+- Early steps (LOGLINE through COMPONENT_DESCRIPTIONS) use guide files
+- Later steps (STAGE_SHOT_DESCRIPTIONS onward) use standard DTO-to-string conversion
+- Logline flows through all subsequent steps as context
+- Moodboard image used for style consistency in LOGLINE, LORE, and all image generation
+
 ### How to Add Context to an LLM Call
 
 **Use Case:** You want to pass additional information from the artifact to a specific generation step.
 
-**Example:** Adding `logline` as context to the NARRATIVE step
+**Example:** Adding `logline` as context to the SCENES step
 
 #### Complete Data Flow:
 ```
-Artifact Field → extract_context_dto() → Populated DTO → context_dto_to_string() → LLM Call
+Artifact Field → extract_context_dto() → Populated DTO → Formatted Context String → LLM Call
 ```
 
 #### Step-by-Step Instructions:
@@ -181,21 +196,21 @@ class StoryboardSpec(StrictModel):
 *Function:* `extract_context_dto(artifact, step, **kwargs)`
 *Location:* Lines ~33-163
 
-Find the elif block for your step (e.g., NARRATIVE around line ~65). Each step is self-contained with field definition, model creation, and data extraction in one block:
+Find the elif block for your step (e.g., SCENES around line ~78). Each step is self-contained with field definition, model creation, and data extraction in one block:
 
 ```python
-elif step == GenerationStep.NARRATIVE:
+elif step == GenerationStep.SCENES:
     fields = {
         "prompt_input": (str, Field(..., description="User's creative input for this generation step")),
+        "logline": (str, Field(..., description=get_field_desc(StoryboardSpec, "logline"))),
         "lore": (str, Field(..., description=get_field_desc(StoryboardSpec, "lore"))),
-        # ADD THIS LINE:
-        "logline": (str, Field(..., description=get_field_desc(StoryboardSpec, "logline")))
+        "narrative": (str, Field(..., description=get_field_desc(StoryboardSpec, "narrative")))
     }
-    ContextModel = create_model("NarrativeContext", **fields, __base__=StrictModel)
+    ContextModel = create_model("ScenesContext", **fields, __base__=StrictModel)
     data = kwargs.copy()
-    data["lore"] = artifact.lore
-    # ADD THIS LINE:
     data["logline"] = artifact.logline
+    data["lore"] = artifact.lore
+    data["narrative"] = artifact.narrative
     return ContextModel(**data)
 ```
 
@@ -203,26 +218,28 @@ elif step == GenerationStep.NARRATIVE:
 
 ---
 
-**3. (Optional) Special LLM call handling**
+**3. Add custom context formatting in generate_step()**
 
 *File:* `storyboard_core/pipeline.py`
 *Function:* `generate_step(artifact, step, prompt_input, **kwargs)`
-*Location:* Lines ~97-174
+*Location:* Lines ~97-196
 
-Most steps use standard handling (automatically includes context via `context_dto_to_string()`):
+For steps with guide files (LOGLINE, LORE, NARRATIVE, SCENES, COMPONENT_DESCRIPTIONS), add special handling to format context:
+
 ```python
-context = extract_context_dto(artifact, step, prompt_input=prompt_input, **kwargs)
-context_str = context_dto_to_string(context)
-responses, _, _ = await batch_llm(
-    model=model,
-    texts=[prompt_input],
-    context=context_str,
-    response_format=OutputModel,
-    reasoning_effort=reasoning
-)
+elif step == GenerationStep.SCENES:
+    context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/scenes_guide.md')}"
+
+    response, _, _ = llm(
+        model=model,
+        text=prompt_input,
+        context=context_str,
+        response_format=OutputModel,
+        reasoning_effort=reasoning
+    )
 ```
 
-Only add special handling if you need custom prompt formatting (like LOGLINE/LORE/NARRATIVE steps which use guide files).
+Other steps use standard handling (automatically includes context via `context_dto_to_string()`).
 
 ---
 
@@ -354,29 +371,54 @@ Artifact updated with new data
 
 #### Two LLM Call Patterns:
 
-**Pattern 1: Standard (most steps)**
+**Pattern 1: Guide-based with context (LOGLINE, LORE, NARRATIVE, SCENES, COMPONENT_DESCRIPTIONS)**
+```python
+# Extract context from DTO
+context = extract_context_dto(artifact, step, prompt_input=prompt_input, **kwargs)
+
+# Format context string with artifact data + guide
+context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\n{_read_guide('prompts/narrative_guide.md')}"
+
+response, _, _ = llm(
+    model=model,
+    text=prompt_input,
+    context=context_str,
+    input_image_path=context.moodboard_path,  # For LOGLINE/LORE only
+    response_format=OutputModel,
+    reasoning_effort=reasoning
+)
+```
+
+**Pattern 2: Standard (other steps)**
 ```python
 context = extract_context_dto(artifact, step, prompt_input=prompt_input, **kwargs)
 context_str = context_dto_to_string(context)
-responses, _, _ = await batch_llm(
+
+response, _, _ = llm(
     model=model,
-    texts=[prompt_input],
+    text=prompt_input,
     context=context_str,
     response_format=OutputModel,
     reasoning_effort=reasoning
 )
 ```
 
-**Pattern 2: Guide-based (LOGLINE/LORE/NARRATIVE steps)**
+**Pattern 3: Batch image generation (COMPONENT_IMAGES)**
 ```python
-guide = _read_guide("prompts/narrative_guide.md")
+# Extract context from DTO
+context = extract_context_dto(artifact, GenerationStep.COMPONENT_IMAGES, prompt_input=prompt_input)
+
+# Build context with guide
+context_str = f"logline: {context.logline}\n\nlore: {context.lore}\n\nnarrative: {context.narrative}\n\n{_read_guide('prompts/components_guide.md')}\n\nGenerate visual concept art images..."
+
+# Pass moodboard as style reference to all batch calls
 responses, _, _ = await batch_llm(
     model=model,
-    texts=[prompt_input],
-    context=guide,  # Guide content used as context
-    image_paths=[moodboard_path],  # For LOGLINE/LORE only
-    response_format=OutputModel,
-    reasoning_effort=reasoning
+    texts=batch_texts,
+    context=context_str,
+    image_paths=[context.moodboard_path] * len(batch_texts),
+    output_is_image=True,
+    image_generation_retries=2
 )
 ```
 
@@ -459,8 +501,11 @@ responses, _, _ = await batch_llm(
    - [ ] Choice persistence and revision history
 
 2. **Advanced Guides**
+   - [x] `logline_guide.md` for logline generation (completed)
+   - [x] `lore_guide.md` for world-building guidance (completed)
    - [x] `narrative_guide.md` for plot structure guidance (completed)
-   - [ ] `scenes_guide.md` for scene breakdown guidance
+   - [x] `scenes_guide.md` for scene breakdown guidance (completed - needs content)
+   - [x] `components_guide.md` for component generation guidance (completed - needs content)
    - [ ] Guide templates for different genres
 
 3. **Performance & Quality**

@@ -249,8 +249,11 @@ def create_output_dto(step) -> Type[StrictModel] | None:
 
     elif step == GenerationStep.COMPONENT_DESCRIPTIONS:
         fields["character_descriptions"] = (Dict[str, str], Field(..., description=f"Dictionary of {get_field_desc(CharacterSpec, 'name').lower()} to {get_field_desc(CharacterSpec, 'description').lower()}"))
+        fields["character_reference_images"] = (Dict[str, str], Field(..., description="Dictionary of character names to reference image filenames. CRITICAL: Use the EXACT filename from the provided reference images list. Each filename is unique. Match the filename precisely character-by-character. Choose the image that best matches the visual style for each character."))
         fields["location_descriptions"] = (Dict[str, str], Field(..., description=f"Dictionary of {get_field_desc(LocationSpec, 'name').lower()} to {get_field_desc(LocationSpec, 'description').lower()}"))
+        fields["location_reference_images"] = (Dict[str, str], Field(..., description="Dictionary of location names to reference image filenames. CRITICAL: Use the EXACT filename from the provided reference images list. Each filename is unique. Match the filename precisely character-by-character. Choose the image that best matches the visual style for each location."))
         fields["prop_descriptions"] = (Dict[str, str], Field(..., description=f"Dictionary of {get_field_desc(PropSpec, 'name').lower()} to {get_field_desc(PropSpec, 'description').lower()}"))
+        fields["prop_reference_images"] = (Dict[str, str], Field(..., description="Dictionary of prop names to reference image filenames. CRITICAL: Use the EXACT filename from the provided reference images list. Each filename is unique. Match the filename precisely character-by-character. Choose the image that best matches the visual style for each prop."))
         fields["scene_to_characters"] = (Dict[str, List[str]], Field(..., description="Mapping of scene names to required characters"))
         fields["scene_to_locations"] = (Dict[str, List[str]], Field(..., description="Mapping of scene names to required locations"))
         fields["scene_to_props"] = (Dict[str, List[str]], Field(..., description="Mapping of scene names to required props"))
@@ -314,24 +317,71 @@ def patch_artifact(artifact: StoryboardSpec, step, output: BaseModel, user_choic
         artifact.scenes = scenes
 
     elif step == GenerationStep.COMPONENT_DESCRIPTIONS:
-        # Create characters
+        from .utils import validate_moodboard_filename
+
+        # Create characters with moodboard references
         characters = []
         for name, desc in output.character_descriptions.items():
-            character = CharacterSpec(name=name, description=desc)
+            # Convert filename to full path if available, with validation
+            moodboard_ref = None
+            if hasattr(output, 'character_reference_images') and name in output.character_reference_images:
+                filename = output.character_reference_images[name]
+                # Validate the filename
+                moodboard_ref = validate_moodboard_filename(
+                    filename,
+                    component_name=name,
+                    component_type="character"
+                )
+
+            character = CharacterSpec(
+                name=name,
+                description=desc,
+                image_reference_from_moodboard=moodboard_ref
+            )
             characters.append(character)
         artifact.characters = characters
 
-        # Create locations
+        # Create locations with moodboard references
         locations = []
         for name, desc in output.location_descriptions.items():
-            location = LocationSpec(name=name, description=desc)
+            # Convert filename to full path if available, with validation
+            moodboard_ref = None
+            if hasattr(output, 'location_reference_images') and name in output.location_reference_images:
+                filename = output.location_reference_images[name]
+                # Validate the filename
+                moodboard_ref = validate_moodboard_filename(
+                    filename,
+                    component_name=name,
+                    component_type="location"
+                )
+
+            location = LocationSpec(
+                name=name,
+                description=desc,
+                image_reference_from_moodboard=moodboard_ref
+            )
             locations.append(location)
         artifact.locations = locations
 
-        # Create props
+        # Create props with moodboard references
         props = []
         for name, desc in output.prop_descriptions.items():
-            prop = PropSpec(name=name, description=desc)
+            # Convert filename to full path if available, with validation
+            moodboard_ref = None
+            if hasattr(output, 'prop_reference_images') and name in output.prop_reference_images:
+                filename = output.prop_reference_images[name]
+                # Validate the filename
+                moodboard_ref = validate_moodboard_filename(
+                    filename,
+                    component_name=name,
+                    component_type="prop"
+                )
+
+            prop = PropSpec(
+                name=name,
+                description=desc,
+                image_reference_from_moodboard=moodboard_ref
+            )
             props.append(prop)
         artifact.props = props
 

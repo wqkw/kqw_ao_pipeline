@@ -11,7 +11,8 @@ import os
 import re
 import json
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Set
+from pathlib import Path
 
 from .artifact import StoryboardSpec
 
@@ -116,3 +117,74 @@ def save_artifact_checkpoint(artifact: StoryboardSpec, step) -> None:
         json.dump(artifact.model_dump(), f, indent=2)
 
     print(f"Checkpoint saved: {checkpoint_path}")
+
+
+def get_valid_moodboard_filenames(moodboard_dir: str = "data/ref_moodboard") -> Set[str]:
+    """Get set of valid moodboard filenames.
+
+    Args:
+        moodboard_dir: Path to moodboard directory
+
+    Returns:
+        Set of valid filenames (just the filename, not full path)
+    """
+    moodboard_path = Path(moodboard_dir)
+    if not moodboard_path.exists():
+        print(f"Warning: Moodboard directory {moodboard_dir} does not exist")
+        return set()
+
+    valid_files = {
+        f.name for f in moodboard_path.glob("*.png")
+        if f.name != "moodboard_tile.png"
+    }
+    return valid_files
+
+
+def validate_moodboard_filename(
+    filename: Optional[str],
+    moodboard_dir: str = "data/ref_moodboard",
+    component_name: str = "",
+    component_type: str = ""
+) -> Optional[str]:
+    """Validate and fix moodboard reference filename.
+
+    Args:
+        filename: Filename to validate (can be just filename or full path)
+        moodboard_dir: Path to moodboard directory
+        component_name: Name of component for logging
+        component_type: Type of component for logging
+
+    Returns:
+        Full path to valid moodboard image, or None if filename is invalid and no fallback
+    """
+    if not filename:
+        return None
+
+    # Strip path if full path provided - just get the filename
+    filename_only = Path(filename).name
+
+    # Get valid filenames
+    valid_filenames = get_valid_moodboard_filenames(moodboard_dir)
+
+    if not valid_filenames:
+        print(f"⚠️  Warning: No valid moodboard files found in {moodboard_dir}")
+        return None
+
+    # Check if filename exists
+    if filename_only in valid_filenames:
+        # Valid! Return full path
+        return f"{moodboard_dir}/{filename_only}"
+
+    # Invalid filename - log warning
+    print(f"⚠️  Invalid moodboard filename for {component_type} '{component_name}': '{filename_only}'")
+    print(f"    This file does not exist in {moodboard_dir}")
+    print(f"    Falling back to moodboard_tile.png")
+
+    # Fallback to moodboard_tile.png
+    fallback_path = f"{moodboard_dir}/moodboard_tile.png"
+    if Path(fallback_path).exists():
+        return fallback_path
+
+    # No fallback available
+    print(f"    Warning: Fallback moodboard_tile.png also not found")
+    return None

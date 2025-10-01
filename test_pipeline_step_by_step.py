@@ -83,6 +83,28 @@ def print_step_info(step: GenerationStep, artifact: StoryboardSpec, user_input: 
             print(f"  {guide_preview}")
             print(f"\n  [Full guide length: {len(narrative_guide)} chars]")
 
+    # Show additional context for SCENES step
+    if step == GenerationStep.SCENES:
+        from storyboard_core.pipeline import _read_guide
+        scenes_guide = _read_guide("prompts/scenes_guide.md")
+        if scenes_guide:
+            # Show first 500 characters of scenes guide
+            guide_preview = scenes_guide[:500] + "..." if len(scenes_guide) > 500 else scenes_guide
+            print(f"\nSCENES GENERATION GUIDE (preview):")
+            print(f"  {guide_preview}")
+            print(f"\n  [Full guide length: {len(scenes_guide)} chars]")
+
+    # Show additional context for COMPONENT_DESCRIPTIONS step
+    if step == GenerationStep.COMPONENT_DESCRIPTIONS:
+        from storyboard_core.pipeline import _read_guide
+        components_guide = _read_guide("prompts/components_guide.md")
+        if components_guide:
+            # Show first 500 characters of components guide
+            guide_preview = components_guide[:500] + "..." if len(components_guide) > 500 else components_guide
+            print(f"\nCOMPONENTS GENERATION GUIDE (preview):")
+            print(f"  {guide_preview}")
+            print(f"\n  [Full guide length: {len(components_guide)} chars]")
+
     # Show current artifact state
     completion_status = get_completion_status(artifact)
     print(f"\nCURRENT COMPLETION STATUS:")
@@ -252,32 +274,46 @@ async def main():
     artifact = load_latest_artifact(project_name)
 
     if artifact:
-        print(f"🔄 Resuming from checkpoint: {artifact.name}")
-        choice = input("Continue from checkpoint? (y/n): ").lower()
-        if choice != 'y':
+        print(f"\n✅ Found existing checkpoint for: {artifact.name}")
+        print(f"   Title: {artifact.title}")
+
+        # Show what's completed
+        completion_status = get_completion_status(artifact)
+        completed_steps = [s.value for s, done in completion_status.items() if done]
+        if completed_steps:
+            print(f"   Completed steps: {', '.join(completed_steps)}")
+
+        choice = input("\nContinue from checkpoint? [Y/n/fresh]: ").lower()
+        if choice == 'fresh':
+            print("🆕 Starting fresh (checkpoint will remain saved)...")
             artifact = None
+        elif choice == 'n':
+            print("👋 Exiting...")
+            return None
+        else:
+            print(f"🔄 Continuing from checkpoint...")
 
     # Initialize new artifact if needed
     if not artifact:
         artifact = StoryboardSpec(
             name=project_name,
             title="Test rbl",
-            moodboard_path="data/moodboard_tile.png"
+            moodboard_path="data/ref_moodboard/moodboard_tile.png"
         )
         print(f"🆕 Starting new artifact: {artifact.title}")
 
     # Define user inputs for each step
     user_inputs = {
-        GenerationStep.LOGLINE: "Generate story logline options based on the moodboard's visual style and aesthetic",
-        GenerationStep.LORE: "Generate lore given the vibes and aesthetics of the moodboard and logline",
-        GenerationStep.NARRATIVE: "Hero's journey with betrayal and redemption",
-        GenerationStep.SCENES: "Break into dramatic scenes with clear emotional arcs",
-        GenerationStep.COMPONENT_DESCRIPTIONS: "Identify all props and environmental elements",
+        GenerationStep.LOGLINE: "Generate logline",
+        GenerationStep.LORE: "Generate lore",
+        GenerationStep.NARRATIVE: "Generate narrative",
+        GenerationStep.SCENES: "Generate scenes",
+        GenerationStep.COMPONENT_DESCRIPTIONS: "Generate component descriptions",
         GenerationStep.COMPONENT_IMAGES: "Generate component images",
-        GenerationStep.STAGE_SHOT_DESCRIPTIONS: "Create establishing shots for each scene",
-        GenerationStep.STAGE_SHOT_IMAGES: "Generate stage setting images",
-        GenerationStep.SHOT_DESCRIPTIONS: "Break down each scene into individual shots with camera angles and framing",
-        GenerationStep.SHOT_IMAGES: "Generate final shot images"
+        GenerationStep.STAGE_SHOT_DESCRIPTIONS: "Generate stage shot descriptions",
+        GenerationStep.STAGE_SHOT_IMAGES: "Generate stage shot images",
+        GenerationStep.SHOT_DESCRIPTIONS: "Generate shot descriptions",
+        GenerationStep.SHOT_IMAGES: "Generate shot images"
     }
 
     print(f"🎬 STEP-BY-STEP PIPELINE TEST")

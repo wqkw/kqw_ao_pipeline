@@ -8,3 +8,4 @@ __pycache__/
 .cursorrules
 
 llm_log.txt
+debug_log.txt
