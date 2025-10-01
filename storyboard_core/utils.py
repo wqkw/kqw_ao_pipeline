@@ -11,10 +11,17 @@ import os
 import re
 import json
 from datetime import datetime
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union
 from pathlib import Path
 
 from .artifact import StoryboardSpec
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
 
 
 def save_image_to_data(image_bytes: bytes, project_name: str, image_type: str, item_name: str) -> str:
@@ -188,3 +195,153 @@ def validate_moodboard_filename(
     # No fallback available
     print(f"    Warning: Fallback moodboard_tile.png also not found")
     return None
+
+
+def create_stage_shots_collage(artifact_or_json: Union[StoryboardSpec, dict, str], output_filename: Optional[str] = None) -> str:
+    """Create a collage image of all stage setting shots with descriptions.
+
+    Args:
+        artifact_or_json: StoryboardSpec artifact, dict representation, or path to JSON file
+        output_filename: Optional custom output filename (defaults to "{project_name}_stage_shots_collage.png")
+
+    Returns:
+        Path to the saved collage image
+
+    Raises:
+        ImportError: If PIL/Pillow is not installed
+        ValueError: If no stage setting shots with images are found
+    """
+    if Image is None:
+        raise ImportError("PIL/Pillow is required for creating collages. Install with: pip install Pillow")
+
+    # Convert input to StoryboardSpec
+    if isinstance(artifact_or_json, str):
+        # It's a file path
+        with open(artifact_or_json, 'r') as f:
+            artifact_dict = json.load(f)
+        artifact = StoryboardSpec(**artifact_dict)
+    elif isinstance(artifact_or_json, dict):
+        # It's a dictionary
+        artifact = StoryboardSpec(**artifact_or_json)
+    else:
+        # It's already a StoryboardSpec
+        artifact = artifact_or_json
+
+    # Collect scenes with stage setting shots that have images
+    scenes_with_images = []
+    for scene in artifact.scenes or []:
+        if scene.stage_setting_shot and scene.stage_setting_shot.image_path:
+            image_path = Path(scene.stage_setting_shot.image_path)
+            if image_path.exists():
+                scenes_with_images.append((scene, image_path))
+
+    if not scenes_with_images:
+        raise ValueError("No stage setting shots with images found in artifact")
+
+    print(f"📸 Creating collage for {len(scenes_with_images)} stage setting shots...")
+
+    # Load all images and find dimensions
+    images = []
+    max_height = 0
+    total_width = 0
+
+    for scene, image_path in scenes_with_images:
+        img = Image.open(image_path)
+        images.append((scene, img))
+        max_height = max(max_height, img.height)
+        total_width += img.width
+
+    # Calculate dimensions for text area
+    text_height = 400  # Larger height for full description text
+    padding = 30
+    scene_padding = 20  # Padding between scenes
+
+    # Create new image for collage
+    collage_width = total_width + (len(images) - 1) * scene_padding
+    collage_height = max_height + text_height + padding * 2
+    collage = Image.new('RGB', (collage_width, collage_height), color='white')
+    draw = ImageDraw.Draw(collage)
+
+    # Try to load a font - large sizes
+    try:
+        # Try different font sizes and paths
+        title_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 42)
+        desc_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 36)
+    except:
+        try:
+            title_font = ImageFont.truetype("arial.ttf", 36)
+            desc_font = ImageFont.truetype("arial.ttf", 22)
+        except:
+            # Fallback to default
+            title_font = ImageFont.load_default()
+            desc_font = ImageFont.load_default()
+
+    # Paste images and add descriptions
+    x_offset = 0
+    for i, (scene, img) in enumerate(images):
+        # Paste image
+        y_offset = (max_height - img.height) // 2  # Center vertically
+        collage.paste(img, (x_offset, y_offset))
+
+        # Add scene name and description
+        text_y = max_height + padding
+        scene_name = scene.name
+        scene_desc = scene.description or ""
+
+        # Draw scene name (larger, bold-looking)
+        draw.text((x_offset + 10, text_y), scene_name, fill='black', font=title_font)
+
+        # Draw description (full text, wrapped)
+        # Word wrap the description based on actual image width
+        words = scene_desc.split()
+        lines = []
+        current_line = []
+
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            # Use textbbox to get actual text width
+            bbox = draw.textbbox((0, 0), test_line, font=desc_font)
+            text_width = bbox[2] - bbox[0]
+
+            if text_width > img.width - 20:  # Leave some margin
+                if current_line:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                else:
+                    lines.append(word)
+                    current_line = []
+            else:
+                current_line.append(word)
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        # Draw all wrapped lines (no limit)
+        line_y = text_y + 50
+        for line in lines:
+            draw.text((x_offset + 10, line_y), line, fill='#333333', font=desc_font)
+            line_y += 30
+
+        x_offset += img.width + scene_padding
+
+    # Save collage
+    output_dir = Path("data") / artifact.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if output_filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"stage_shots_collage_{timestamp}.png"
+
+    output_path = output_dir / output_filename
+    collage.save(output_path)
+
+    print(f"✅ Collage saved: {output_path}")
+    return str(output_path)
+
+
+if __name__ == "__main__":
+    # Test the collage function on test_rbl artifact
+    test_artifact_path = "data/test_rbl/artifact_after_stage_shot_images.json"
+    print(f"🎬 Creating stage shots collage from {test_artifact_path}")
+    collage_path = create_stage_shots_collage(test_artifact_path)
+    print(f"📸 Collage created at: {collage_path}")

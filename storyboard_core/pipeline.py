@@ -279,9 +279,13 @@ async def generate_batch_stage_shots(artifact: StoryboardSpec, prompt_input: str
     successful_scenes = 0
     for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
         if response and hasattr(response, 'shot_descriptions') and response.shot_descriptions:
+            # Create stage setting shot with component references
             scene.stage_setting_shot = ShotSpec(
                 name=f"{scene.name} Stage Setting",
-                description=response.shot_descriptions[0]
+                description=response.shot_descriptions[0],
+                location_name=scene.location_names[0] if scene.location_names else None,
+                character_names=scene.character_names,
+                prop_names=scene.prop_names
             )
             print(f"    ✅ Scene {i+1}: {response.shot_descriptions[0][:50]}...")
             successful_scenes += 1
@@ -375,26 +379,34 @@ async def generate_stage_shot_images(artifact: StoryboardSpec, prompt_input: str
 
     for i, scene in enumerate(artifact.scenes):
         if scene.stage_setting_shot and scene.stage_setting_shot.description:
-            # Collect character and prop images for this scene
+            # Collect component images referenced by the stage setting shot
             component_images = []
+            stage_shot = scene.stage_setting_shot
+
+            # Add location image
+            if stage_shot.location_name and artifact.locations:
+                for loc in artifact.locations:
+                    if loc.name == stage_shot.location_name and loc.image_path:
+                        component_images.append(loc.image_path)
+                        break
 
             # Add character images
-            if scene.character_names and artifact.characters:
-                for char_name in scene.character_names:
+            if stage_shot.character_names and artifact.characters:
+                for char_name in stage_shot.character_names:
                     for char in artifact.characters:
                         if char.name == char_name and char.image_path:
                             component_images.append(char.image_path)
                             break
 
             # Add prop images
-            if scene.prop_names and artifact.props:
-                for prop_name in scene.prop_names:
+            if stage_shot.prop_names and artifact.props:
+                for prop_name in stage_shot.prop_names:
                     for prop in artifact.props:
                         if prop.name == prop_name and prop.image_path:
                             component_images.append(prop.image_path)
                             break
 
-            texts.append(f"{scene.stage_setting_shot.description}")
+            texts.append(f"{stage_shot.description}")
             image_paths_list.append(component_images if component_images else None)
             scene_indices.append(i)
 
@@ -407,7 +419,7 @@ async def generate_stage_shot_images(artifact: StoryboardSpec, prompt_input: str
     responses, _, _ = await batch_llm(
         model=model,
         texts=texts,
-        context="Generate stage setting images. Use the provided character and prop images as visual reference for style and composition. Create detailed environmental illustrations that establish the scene's atmosphere.",
+        context="Generate stage setting images. Use the provided location, character, and prop images as visual reference for style and composition. Create detailed environmental illustrations that establish the scene's atmosphere.",
         image_paths=image_paths_list,
         output_is_image=True,
         image_generation_retries=2

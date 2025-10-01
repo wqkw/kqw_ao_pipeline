@@ -129,10 +129,12 @@ def extract_context_dto(artifact: StoryboardSpec, step, **kwargs) -> BaseModel:
         data["props"] = artifact.props or []
         return ContextModel(**data)
     elif step == GenerationStep.STAGE_SHOT_DESCRIPTIONS:
+        # Note: This DTO is no longer used by generate_batch_stage_shots (refactored to not use DTOs)
+        # Kept for backward compatibility in case other code paths use it
         fields = {
             "prompt_input": (str, Field(..., description="User's creative input for this generation step")),
-            "scene_name": (str, Field(..., description=get_field_desc(SceneSpec, "name"))),
-            "scene_description": (str, Field(..., description=get_field_desc(SceneSpec, "description"))),
+            "scene_name": (str, Field(default="", description=get_field_desc(SceneSpec, "name"))),
+            "scene_description": (str, Field(default="", description=get_field_desc(SceneSpec, "description"))),
             "narrative": (str, Field(..., description=get_field_desc(StoryboardSpec, "narrative"))),
             "prop_descriptions": (Dict[str, str], Field(..., description="Dictionary of prop names to descriptions"))
         }
@@ -142,11 +144,13 @@ def extract_context_dto(artifact: StoryboardSpec, step, **kwargs) -> BaseModel:
         data["prop_descriptions"] = {prop.name: prop.description or "" for prop in artifact.props}
         return ContextModel(**data)
     elif step == GenerationStep.STAGE_SHOT_IMAGES:
+        # Note: This DTO is no longer used by generate_stage_shot_images (refactored to not use DTOs)
+        # Kept for backward compatibility in case other code paths use it
         fields = {
             "prompt_input": (str, Field(..., description="User's creative input for this generation step")),
-            "stage_shot_description": (str, Field(..., description="Generated description of the stage setting shot")),
-            "scene_description": (str, Field(..., description=get_field_desc(SceneSpec, "description"))),
-            "component_image_paths": (List[str], Field(..., description="URLs of component images"))
+            "stage_shot_description": (str, Field(default="", description="Generated description of the stage setting shot")),
+            "scene_description": (str, Field(default="", description=get_field_desc(SceneSpec, "description"))),
+            "component_image_paths": (List[str], Field(default_factory=list, description="URLs of component images"))
         }
         ContextModel = create_model("StageShotImagesContext", **fields, __base__=StrictModel)
         data = kwargs.copy()
