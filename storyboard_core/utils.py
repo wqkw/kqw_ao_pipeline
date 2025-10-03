@@ -339,9 +339,9 @@ def create_stage_shots_collage(artifact_or_json: Union[StoryboardSpec, dict, str
     return str(output_path)
 
 
-if __name__ == "__main__":
-    # Test the collage function on test_rbl artifact
-    test_artifact_path = "data/test_rbl/artifact_after_stage_shot_images.json"
-    print(f"🎬 Creating stage shots collage from {test_artifact_path}")
-    collage_path = create_stage_shots_collage(test_artifact_path)
-    print(f"📸 Collage created at: {collage_path}")
+# if __name__ == "__main__":
+#     # Test the collage function on test_rbl artifact
+#     test_artifact_path = "data/test_rbl/artifact_after_stage_shot_images.json"
+#     print(f"🎬 Creating stage shots collage from {test_artifact_path}")
+#     collage_path = create_stage_shots_collage(test_artifact_path)
+#     print(f"📸 Collage created at: {collage_path}")

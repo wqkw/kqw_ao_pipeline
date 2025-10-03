@@ -9,3 +9,4 @@ __pycache__/
 
 llm_log.txt
 debug_log.txt
+image_generation_debug.txt

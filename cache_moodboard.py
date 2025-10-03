@@ -14,9 +14,9 @@ import math
 load_dotenv()
 
 # Local paths
-REF_MOODBOARD_DIR = "data/ref_moodboard"
-MOODBOARD_DATA_CSV = "data/ref_moodboard/moodboard_data.csv"
-MOODBOARD_TILE_PATH = "data/ref_moodboard/moodboard_tile.png"
+REF_MOODBOARD_DIR = "data/ref_moodboard3"
+MOODBOARD_DATA_CSV = "data/ref_moodboard3/moodboard_data.csv"
+MOODBOARD_TILE_PATH = "data/ref_moodboard3/moodboard_tile.png"
 
 def query_moodboard_collection_item(moodboardId='cmfeyqgsm000yl1046yzyi9rw'):
     try:
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     # Create ref_moodboard directory if it doesn't exist
     os.makedirs(REF_MOODBOARD_DIR, exist_ok=True)
 
-    df = query_moodboard_collection_item()
+    df = query_moodboard_collection_item('cmg86y15n0000kv04qxhtcct6')
     df = df.dropna(how = 'any')
 
     # Calculate grid dimensions for approximately 3:2 ratio
