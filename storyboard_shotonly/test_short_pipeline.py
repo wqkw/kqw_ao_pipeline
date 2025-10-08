@@ -6,11 +6,11 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-from storyboard_short import (
+from storyboard_shotonly import (
     ShortStoryboardSpec,
     GenerationStep, get_completion_status, get_next_steps,
     extract_context_dto, context_dto_to_string, create_output_dto,
-    patch_artifact, generate_step, generate_batch_shots, generate_shot_images,
+    patch_artifact, generate_step, generate_shots, generate_shot_images,
     save_artifact_checkpoint
 )
 
@@ -47,7 +47,7 @@ def print_step_info(step: GenerationStep, artifact: ShortStoryboardSpec, user_in
     print(f"\nCOMPLETION STATUS:")
     for step_name, completed in completion_status.items():
         status = "✅" if completed else "❌"
-        print(f"  {status} {step_name.value}")
+        print(f"  {step_name.value}: {status}")
 
     print(f"\nUSER INPUT: {user_input}")
     print("\n" + "-"*80)
@@ -61,9 +61,9 @@ async def run_single_step(artifact: ShortStoryboardSpec, step: GenerationStep, u
 
     print(f"\n🚀 Executing {step.value}...")
 
-    # Handle batch generation for shots
+    # Handle shot generation (single scene)
     if step == GenerationStep.SHOTS:
-        artifact = await generate_batch_shots(artifact, user_input)
+        artifact = await generate_shots(artifact, user_input)
 
     # Handle shot image generation
     elif step == GenerationStep.SHOT_IMAGES:
@@ -71,7 +71,7 @@ async def run_single_step(artifact: ShortStoryboardSpec, step: GenerationStep, u
 
     # Handle final image generation (create collage)
     elif step == GenerationStep.FINAL_IMAGE:
-        from storyboard_short.utils import create_shots_collage
+        from storyboard_shotonly.utils import create_shots_collage
         print(f"🎨 Creating final collage from all shots...")
         try:
             collage_path = create_shots_collage(artifact)
@@ -94,11 +94,9 @@ async def run_single_step(artifact: ShortStoryboardSpec, step: GenerationStep, u
             # Debug: Show what was patched
             if step == GenerationStep.IMAGE_RECOGNITION:
                 print(f"   Image descriptions: {len(artifact.image_descriptions or [])} images")
-            elif step == GenerationStep.SCENES:
-                print(f"   Scenes created: {len(artifact.scenes or [])} scenes")
-                if artifact.scenes:
-                    for i, scene in enumerate(artifact.scenes):
-                        print(f"     {i+1}. {scene.name}")
+            elif step == GenerationStep.MOTION_NARRATIVE_ANALYSIS:
+                print(f"   Motion level: {artifact.motion_level}")
+                print(f"   Narrative level: {artifact.narrative_level}")
         else:
             print(f"\n⚠️  No output returned from LLM")
 
@@ -112,15 +110,17 @@ async def run_single_step(artifact: ShortStoryboardSpec, step: GenerationStep, u
     print(f"  - Input images: {len(artifact.image_references)}")
     if artifact.image_descriptions:
         print(f"  - Image descriptions: {len(artifact.image_descriptions)}")
-    if artifact.scenes:
-        print(f"  - Scenes: {len(artifact.scenes)}")
-        for i, scene in enumerate(artifact.scenes):
-            shots_count = len(scene.shots) if scene.shots else 0
-            if scene.shots:
-                shots_with_images = sum(1 for shot in scene.shots if shot.image_path)
-                print(f"    {i+1}. {scene.name} ({shots_count} shots, {shots_with_images} with images)")
-            else:
-                print(f"    {i+1}. {scene.name} ({shots_count} shots)")
+    if artifact.motion_level:
+        print(f"  - Motion level: {artifact.motion_level}")
+    if artifact.narrative_level:
+        print(f"  - Narrative level: {artifact.narrative_level}")
+    if artifact.scene:
+        shots_count = len(artifact.scene.shots) if artifact.scene.shots else 0
+        if artifact.scene.shots:
+            shots_with_images = sum(1 for shot in artifact.scene.shots if shot.image_path)
+            print(f"  - Scene: {artifact.scene.name} ({shots_count} shots, {shots_with_images} with images)")
+        else:
+            print(f"  - Scene: {artifact.scene.name} ({shots_count} shots)")
     if artifact.final_image_path:
         print(f"  - Final image: {artifact.final_image_path}")
 
@@ -131,7 +131,7 @@ def load_latest_artifact(run_name: str) -> ShortStoryboardSpec:
     """Load the latest artifact checkpoint for a specific run.
 
     Args:
-        run_name: Name of the run (e.g., 'test_short_gen_20251001_143022')
+        run_name: Name of the run (e.g., 'test_shot_gen_20251001_143022')
 
     Returns:
         ShortStoryboardSpec or None if no checkpoint found
@@ -151,7 +151,7 @@ def load_latest_artifact(run_name: str) -> ShortStoryboardSpec:
         return None
 
     # Sort by step order
-    step_order = ["image_recognition", "scenes", "shots", "shot_images", "final_image"]
+    step_order = ["image_recognition", "motion_narrative_analysis", "shots", "shot_images", "final_image"]
 
     def step_priority(path):
         filename = os.path.basename(path)
@@ -173,7 +173,7 @@ async def main():
     # Generate unique run name with timestamp
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"test_short_gen_{timestamp}"
+    run_name = f"test_shot_gen_{timestamp}"
 
     # Get input images from command line or use defaults
     if len(sys.argv) > 1:
@@ -181,9 +181,7 @@ async def main():
     else:
         # Default to some moodboard images
         image_paths = [
-            # "data/ref_moodboard3/05_01.png",
-            "data/ref_moodboard4/magnifics_upscale-yXoYVTtgtRWqJhcapL47-nickfloats_Close-up_of_two_cars_racing_on_the_road_one_car_in_5c7756dd-65fe-416e-ac81-90536741a5d0_3.png",
-            # "data/ref_moodboard2/01_04.png",
+            "data/ref_moodboard4/6.png",
         ]
 
     # Validate image paths
@@ -240,13 +238,13 @@ async def main():
     # Define user inputs for each step
     user_inputs = {
         GenerationStep.IMAGE_RECOGNITION: "Analyze and describe these images in detail",
-        GenerationStep.SCENES: "Generate 1 highly dynamic, action-packed scene with lots of motion and things happening",
-        GenerationStep.SHOTS: "Generate 4-6 camera shots capturing intense action, movement, and dramatic activity for each scene",
+        GenerationStep.MOTION_NARRATIVE_ANALYSIS: "Analyze the motion and narrative levels based on the image descriptions",
+        GenerationStep.SHOTS: "Generate 10 camera shots that match the motion and narrative levels",
         GenerationStep.SHOT_IMAGES: "Generate images for all shots",
         GenerationStep.FINAL_IMAGE: "Create shots collage"
     }
 
-    print(f"\n🎬 SHORT STORYBOARD PIPELINE TEST")
+    print(f"\n🎬 SHOT-ONLY STORYBOARD PIPELINE TEST")
     print("="*80)
 
     # Run each step individually

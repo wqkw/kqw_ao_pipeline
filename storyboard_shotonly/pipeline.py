@@ -1,8 +1,9 @@
 """
-Short Storyboard Generation Pipeline
+Shot-Only Storyboard Generation Pipeline
 
-Simplified pipeline for generating quick scene sequences from 1-3 input images.
-All generation guides are embedded directly in this file.
+Shot-only pipeline for generating shots directly from input images.
+Workflow: IMAGE_RECOGNITION -> MOTION_NARRATIVE_ANALYSIS -> SHOTS
+Always generates exactly 1 scene.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from .utils import save_image_to_data, save_artifact_checkpoint, create_shots_co
 
 class GenerationStep(Enum):
     IMAGE_RECOGNITION = "image_recognition"
-    SCENES = "scenes"
+    MOTION_NARRATIVE_ANALYSIS = "motion_narrative_analysis"
     SHOTS = "shots"
     SHOT_IMAGES = "shot_images"
     FINAL_IMAGE = "final_image"
@@ -52,59 +53,58 @@ For each image, describe:
 Be specific and visual. Focus on what you see, not what might be happening.
 """
 
-SCENES_GUIDE = """
-# Scene Generation Guide
+MOTION_NARRATIVE_ANALYSIS_GUIDE = """
+# Motion & Narrative Analysis Guide
 
-Create 1 highly dynamic and action-packed scenes based on the input images.
+Based on the input image descriptions, analyze and determine:
 
-Each scene should:
-- Feature intense motion, action, or dramatic activity
-- Include multiple things happening simultaneously
-- Show energy, movement, and visual dynamism
-- NOT follow a story progression (standalone action moments)
-- Draw visual inspiration from the input images
-- Have a clear mood or atmosphere with HIGH energy
+1. MOTION LEVEL (low/medium/high):
+   - LOW: Minimal movement, static compositions, calm scenes
+   - MEDIUM: Moderate activity, some dynamic elements
+   - HIGH: Intense action, fast movement, high energy
 
-Focus on:
-- Dynamic action and movement (what's actively happening)
-- Multiple elements in motion or interaction
-- Physical energy and visual intensity
-- Dramatic moments with clear activity
+2. NARRATIVE LEVEL (low/medium/high):
+   - LOW: Abstract, no clear story, visual/mood focused
+   - MEDIUM: Some story elements, loose narrative
+   - HIGH: Clear story progression, defined characters/plot
 
-IMPORTANT: Scenes should feel alive with action, not static. Emphasize verbs and movement.
+Consider:
+- Visual style and energy of the images
+- Subject matter and composition
+- Mood and atmosphere
+- What kind of shots would best capture this content
 
-Keep scenes concise but evocative.
-
-Make sure not to do anything too violent as to trigger content moderation.
+Provide your analysis and reasoning for both levels.
 """
 
 SHOTS_GUIDE = """
 # Shot Generation Guide
 
-For each scene, create 4-6 camera shots that capture DYNAMIC ACTION and MOVEMENT.
+Create 4-6 camera shots based on the image descriptions and motion/narrative analysis.
+
+Shot characteristics based on MOTION LEVEL:
+- LOW motion: Static compositions, contemplative framing, minimal camera movement
+- MEDIUM motion: Some dynamic elements, moderate camera movement
+- HIGH motion: Fast action, intense movement, dynamic camera work
+
+Shot characteristics based on NARRATIVE LEVEL:
+- LOW narrative: Abstract compositions, mood-focused, visual exploration
+- MEDIUM narrative: Loose story moments, character glimpses
+- HIGH narrative: Clear story beats, character development, plot progression
 
 Each shot should:
-- Emphasize motion, action, and things actively happening
-- Show movement within the frame (people moving, objects in motion, environmental action)
+- Match the determined motion and narrative levels
 - Have a specific camera angle and framing
-- Show a different aspect or perspective of the action
+- Show different aspects or perspectives
 - Build visual variety (wide, medium, close-up mix)
-- Include camera movement to enhance the sense of motion (tracking, following action, etc.)
-
-IMPORTANT: Every shot should capture something MOVING or HAPPENING. Avoid static poses.
+- Align with the visual style of the input images
 
 Camera angles to consider:
 - Eye level, high angle, low angle, overhead, canted
 - Wide shot, medium shot, close-up, extreme close-up
-- Dynamic camera movements: tracking, following, whip pan, dolly, crane, handheld
+- Camera movements: static, tracking, dolly, crane, handheld
 
-What to capture in each shot:
-- Active verbs: running, jumping, splashing, throwing, falling, spinning, etc.
-- Environmental motion: wind, water, particles, light changes
-- Multiple elements moving simultaneously
-- Peak action moments and dramatic movement
-
-Be specific about what the camera sees, what's moving, and how the camera follows the action.
+Be specific about what the camera sees and how it captures the moment.
 
 Make sure not to do anything too violent as to trigger content moderation.
 """
@@ -129,17 +129,17 @@ def _select_model_for_step(step: GenerationStep) -> Tuple[str, str]:
     if step == GenerationStep.IMAGE_RECOGNITION:
         return "google/gemini-2.5-flash", "minimal"
 
-    # Scene and shot generation use fast model
+    # Motion/narrative analysis and shot generation use fast model
     return "google/gemini-2.5-flash", "minimal"
 
 
 # ---------- Generation Pipeline ----------
 
 async def generate_step(artifact: ShortStoryboardSpec, step: GenerationStep, prompt_input: str, **kwargs) -> Tuple[ShortStoryboardSpec, BaseModel]:
-    """Execute a single generation step (IMAGE_RECOGNITION or SCENES only).
+    """Execute a single generation step (IMAGE_RECOGNITION or MOTION_NARRATIVE_ANALYSIS only).
 
     Other steps use specialized batch functions:
-    - SHOTS: generate_batch_shots()
+    - SHOTS: generate_shots() (single scene, not batch)
     - SHOT_IMAGES: generate_shot_images()
     - FINAL_IMAGE: create_shots_collage()
 
@@ -174,12 +174,12 @@ async def generate_step(artifact: ShortStoryboardSpec, step: GenerationStep, pro
             reasoning_effort=reasoning
         )
 
-    # SCENES: Generate 1-2 scenes from image descriptions
-    elif step == GenerationStep.SCENES:
+    # MOTION_NARRATIVE_ANALYSIS: Determine motion and narrative levels
+    elif step == GenerationStep.MOTION_NARRATIVE_ANALYSIS:
         context_str = f"Image descriptions:\n"
         for i, desc in enumerate(context.image_descriptions):
             context_str += f"{i+1}. {desc}\n"
-        context_str += f"\n{SCENES_GUIDE}"
+        context_str += f"\n{MOTION_NARRATIVE_ANALYSIS_GUIDE}"
 
         response, _, _ = llm(
             model=model,
@@ -190,13 +190,13 @@ async def generate_step(artifact: ShortStoryboardSpec, step: GenerationStep, pro
         )
 
     else:
-        raise ValueError(f"generate_step should only be called for IMAGE_RECOGNITION or SCENES. Use specialized functions for {step.value}")
+        raise ValueError(f"generate_step should only be called for IMAGE_RECOGNITION or MOTION_NARRATIVE_ANALYSIS. Use specialized functions for {step.value}")
 
     return artifact, response
 
 
-async def generate_batch_shots(artifact: ShortStoryboardSpec, prompt_input: str) -> ShortStoryboardSpec:
-    """Generate shots for all scenes in parallel.
+async def generate_shots(artifact: ShortStoryboardSpec, prompt_input: str) -> ShortStoryboardSpec:
+    """Generate shots for the single scene.
 
     Args:
         artifact: Current storyboard artifact
@@ -205,57 +205,62 @@ async def generate_batch_shots(artifact: ShortStoryboardSpec, prompt_input: str)
     Returns:
         Updated artifact with shots
     """
-    if not artifact.scenes:
-        return artifact
-
     # Get model and reasoning effort
     model, reasoning = _select_model_for_step(GenerationStep.SHOTS)
     OutputModel = create_output_dto(GenerationStep.SHOTS)
 
-    print(f"🎬 Generating shots for {len(artifact.scenes)} scenes")
+    print(f"🎬 Generating shots based on motion level: {artifact.motion_level}, narrative level: {artifact.narrative_level}")
 
-    # Prepare batch data
-    texts = []
-    for scene in artifact.scenes:
-        texts.append(f"Generate 4-6 dynamic camera shots with lots of action and movement for scene: {scene.name}\n\nScene: {scene.description}")
+    # Prepare prompt with motion and narrative context
+    motion_desc = f"Motion level: {artifact.motion_level or 'medium'}"
+    narrative_desc = f"Narrative level: {artifact.narrative_level or 'medium'}"
 
-    # Generate shots
-    batch_context = f"Generate 4-6 action-packed camera shots for each scene. Focus on motion, dynamics, and things actively happening.\n\n{SHOTS_GUIDE}"
+    image_desc = "Image descriptions:\n"
+    if artifact.image_descriptions:
+        for i, desc in enumerate(artifact.image_descriptions):
+            image_desc += f"{i+1}. {desc}\n"
 
-    responses, _, _ = await batch_llm(
+    context_str = f"{image_desc}\n{motion_desc}\n{narrative_desc}\n\n{SHOTS_GUIDE}"
+
+    prompt_text = f"{prompt_input}\n\nGenerate 4-6 camera shots that match the motion and narrative levels."
+
+    response, _, _ = llm(
         model=model,
-        texts=texts,
-        context=batch_context,
+        text=prompt_text,
+        context=context_str,
         response_format=OutputModel,
         reasoning_effort=reasoning
     )
 
-    # Process responses and update scenes
-    successful_scenes = 0
-    for i, (scene, response) in enumerate(zip(artifact.scenes, responses)):
-        if response and hasattr(response, 'shots') and response.shots:
-            # Convert ShotDescription objects to ShotSpec objects (with image_path=None)
-            scene.shots = [
-                ShotSpec(
-                    name=shot.name,
-                    description=shot.description,
-                    camera_angle=shot.camera_angle,
-                    image_path=None  # Will be filled in by SHOT_IMAGES step
-                )
-                for shot in response.shots
-            ]
-            print(f"  ✅ Scene {i+1}: {len(response.shots)} shots created")
-            successful_scenes += 1
-        else:
-            print(f"  ❌ Scene {i+1}: No shots generated")
+    # Process response and create scene with shots
+    if response and hasattr(response, 'shots') and response.shots:
+        # Convert ShotDescription objects to ShotSpec objects (with image_path=None)
+        shots = [
+            ShotSpec(
+                name=shot.name,
+                description=shot.description,
+                camera_angle=shot.camera_angle,
+                image_path=None  # Will be filled in by SHOT_IMAGES step
+            )
+            for shot in response.shots
+        ]
 
-    print(f"  📊 Shots created: {successful_scenes}/{len(artifact.scenes)}")
+        # Create scene with shots
+        artifact.scene = SceneSpec(
+            name="Main Scene",
+            description=f"Motion: {artifact.motion_level}, Narrative: {artifact.narrative_level}",
+            shots=shots
+        )
+
+        print(f"  ✅ Generated {len(shots)} shots")
+    else:
+        print(f"  ❌ No shots generated")
 
     return artifact
 
 
 async def generate_shot_images(artifact: ShortStoryboardSpec, prompt_input: str) -> ShortStoryboardSpec:
-    """Generate images for all shots in parallel.
+    """Generate images for all shots in the scene.
 
     Args:
         artifact: Current storyboard artifact
@@ -264,23 +269,21 @@ async def generate_shot_images(artifact: ShortStoryboardSpec, prompt_input: str)
     Returns:
         Updated artifact with shot images
     """
-    if not artifact.scenes:
+    if not artifact.scene or not artifact.scene.shots:
         return artifact
 
     # Collect all shots that need images
     shots_to_generate = []
-    shot_metadata = []  # (scene_index, shot_index) for tracking
+    shot_indices = []  # shot indices for tracking
 
-    for scene_idx, scene in enumerate(artifact.scenes):
-        if scene.shots:
-            for shot_idx, shot in enumerate(scene.shots):
-                if shot.description:
-                    shots_to_generate.append({
-                        "shot_description": shot.description,
-                        "scene_name": scene.name,
-                        "shot_name": shot.name
-                    })
-                    shot_metadata.append((scene_idx, shot_idx))
+    for shot_idx, shot in enumerate(artifact.scene.shots):
+        if shot.description:
+            shots_to_generate.append({
+                "shot_description": shot.description,
+                "scene_name": artifact.scene.name,
+                "shot_name": shot.name
+            })
+            shot_indices.append(shot_idx)
 
     if not shots_to_generate:
         return artifact
@@ -343,15 +346,14 @@ async def generate_shot_images(artifact: ShortStoryboardSpec, prompt_input: str)
     successful_images = 0
     failed_images = 0
 
-    for (scene_idx, shot_idx), image_bytes in zip(shot_metadata, all_responses):
-        scene = artifact.scenes[scene_idx]
-        shot = scene.shots[shot_idx]
+    for shot_idx, image_bytes in zip(shot_indices, all_responses):
+        shot = artifact.scene.shots[shot_idx]
 
         if image_bytes is not None:
             try:
                 image_path = save_image_to_data(image_bytes, artifact.name, "shot", shot.name)
                 shot.image_path = image_path
-                print(f"    ✅ Saved: {scene.name} - {shot.name}")
+                print(f"    ✅ Saved: {shot.name}")
                 successful_images += 1
             except Exception as e:
                 print(f"    ❌ Save failed for {shot.name}: {str(e)[:50]}")
@@ -389,9 +391,9 @@ async def run_generation_pipeline(artifact: ShortStoryboardSpec, user_inputs: di
 
             print(f"Generating {step.value}...")
 
-            # Handle batch generation for shots
+            # Handle shot generation (single scene)
             if step == GenerationStep.SHOTS:
-                artifact = await generate_batch_shots(artifact, user_inputs[step])
+                artifact = await generate_shots(artifact, user_inputs[step])
 
             # Handle shot image generation
             elif step == GenerationStep.SHOT_IMAGES:

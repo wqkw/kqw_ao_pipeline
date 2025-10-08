@@ -33,9 +33,11 @@ class SceneSpec(StrictModel):
 # ---------- Main Artifact ----------
 
 class ShortStoryboardSpec(StrictModel):
-    """Short storyboard generated from 1-3 input images."""
+    """Shot-only storyboard generated from 1-3 input images. Always has exactly 1 scene."""
     name: str = Field(..., description="Unique identifier for this storyboard (e.g., 'test_short_001').")
     image_references: List[str] = Field(..., description="List of file paths to input images (1-3 images).")
     image_descriptions: Optional[List[str]] = Field(None, description="AI-generated descriptions of each input image.")
-    scenes: Optional[List[SceneSpec]] = Field(None, description="1-2 scenes generated from the input images.")
+    motion_level: Optional[str] = Field(None, description="How dynamic and motion-filled the shots should be (low/medium/high).")
+    narrative_level: Optional[str] = Field(None, description="How much narrative/story there should be (low/medium/high).")
+    scene: Optional[SceneSpec] = Field(None, description="Single scene with shots (always exactly 1 scene).")
     final_image_path: Optional[str] = Field(None, description="Path to the final composite image of the sequence.")

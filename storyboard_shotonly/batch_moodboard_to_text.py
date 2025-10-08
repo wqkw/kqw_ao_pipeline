@@ -5,13 +5,13 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from storyboard_short import (
+from storyboard_shotonly import (
     ShortStoryboardSpec,
     GenerationStep,
-    generate_step, generate_batch_shots,
+    generate_step, generate_shots,
     patch_artifact
 )
-from storyboard_short.utils import artifact_to_shot_list_string
+from storyboard_shotonly.utils import artifact_to_shot_list_string
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ async def process_single_image(image_path: str, output_dir: Path) -> None:
 
     # Create unique run name based on image filename
     image_name = Path(image_path).stem
-    run_name = f"moodboard4_{image_name}"
+    run_name = f"shotonly_{image_name}"
 
     print(f"\n{'='*80}")
     print(f"Processing: {image_name}")
@@ -36,8 +36,8 @@ async def process_single_image(image_path: str, output_dir: Path) -> None:
     # User inputs for each step
     user_inputs = {
         GenerationStep.IMAGE_RECOGNITION: "Analyze and describe this image in detail",
-        GenerationStep.SCENES: "Generate 1 highly dynamic, action-packed scene with lots of motion and things happening",
-        GenerationStep.SHOTS: "Generate 4-6 camera shots capturing intense action, movement, and dramatic activity for each scene",
+        GenerationStep.MOTION_NARRATIVE_ANALYSIS: "Based on the image, determine the appropriate motion level (low/medium/high) and narrative level (low/medium/high)",
+        GenerationStep.SHOTS: "Generate 4-6 camera shots that match the determined motion and narrative levels",
     }
 
     # Step 1: IMAGE_RECOGNITION
@@ -51,33 +51,29 @@ async def process_single_image(image_path: str, output_dir: Path) -> None:
         artifact = patch_artifact(artifact, GenerationStep.IMAGE_RECOGNITION, output)
         print(f"  ✅ Image descriptions: {len(artifact.image_descriptions or [])} images")
 
-    # Step 2: SCENES
-    print(f"\n🎬 Step 2: Scene Generation")
+    # Step 2: MOTION_NARRATIVE_ANALYSIS
+    print(f"\n📊 Step 2: Motion & Narrative Analysis")
     artifact, output = await generate_step(
         artifact,
-        GenerationStep.SCENES,
-        user_inputs[GenerationStep.SCENES]
+        GenerationStep.MOTION_NARRATIVE_ANALYSIS,
+        user_inputs[GenerationStep.MOTION_NARRATIVE_ANALYSIS]
     )
     if output:
-        artifact = patch_artifact(artifact, GenerationStep.SCENES, output)
-        print(f"  ✅ Scenes created: {len(artifact.scenes or [])} scenes")
-        if artifact.scenes:
-            for i, scene in enumerate(artifact.scenes):
-                print(f"    {i+1}. {scene.name}")
+        artifact = patch_artifact(artifact, GenerationStep.MOTION_NARRATIVE_ANALYSIS, output)
+        print(f"  ✅ Motion level: {artifact.motion_level}")
+        print(f"  ✅ Narrative level: {artifact.narrative_level}")
 
     # Step 3: SHOTS
     print(f"\n🎥 Step 3: Shot Generation")
-    artifact = await generate_batch_shots(
+    artifact = await generate_shots(
         artifact,
         user_inputs[GenerationStep.SHOTS]
     )
 
     # Count shots
     total_shots = 0
-    if artifact.scenes:
-        for scene in artifact.scenes:
-            if scene.shots:
-                total_shots += len(scene.shots)
+    if artifact.scene and artifact.scene.shots:
+        total_shots = len(artifact.scene.shots)
     print(f"  ✅ Shots generated: {total_shots} total shots")
 
     # Convert to text string
@@ -95,7 +91,7 @@ async def process_single_image(image_path: str, output_dir: Path) -> None:
 async def main():
     # Input and output directories
     input_dir = Path("data/ref_moodboard4")
-    output_dir = Path("data/ref_moodboard4_text")
+    output_dir = Path("data/ref_moodboard4_shotonly_text")
 
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
